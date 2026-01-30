@@ -23,7 +23,7 @@ namespace Utils {
 		if (t == 0.0f) return a;
 		t = glm::max(0.0f, glm::min(1.0f, (glm::dot(p, ab) - glm::dot(a, ab)) / t));
 		glm::vec2 closest = a;
-		return a + ab * t;
+		return closest + ab * t;
 	}
 
 	inline glm::vec2 getPerpendicular(glm::vec2 v) {

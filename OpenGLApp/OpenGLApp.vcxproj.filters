@@ -23,8 +23,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="billiard.fs" />
-    <None Include="billiard.vs" />
+    <None Include="circle.fs" />
+    <None Include="circle.vs" />
+    <None Include="square.vs" />
+    <None Include="square.fs" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Utils.h">

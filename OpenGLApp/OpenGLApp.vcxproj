@@ -137,8 +137,10 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="billiard.fs" />
-    <None Include="billiard.vs" />
+    <None Include="square.fs" />
+    <None Include="square.vs" />
+    <None Include="circle.fs" />
+    <None Include="circle.vs" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Utils.h" />
