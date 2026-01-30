@@ -1,10 +1,6 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
 #include <shader.h>
 
 #include "Utils.h"
@@ -25,7 +21,7 @@ const unsigned int HEIGHT = 800;
 GLFWwindow* window = nullptr;
 
 // vertex data
-GLuint vao, vbo, ebo;
+GLuint circleVAO, circleVBO, circleEBO;
 const unsigned int CIRCLE_VERTS_NUM = 362;
 float circleVerts[CIRCLE_VERTS_NUM * 3];
 unsigned int circleIndices[CIRCLE_VERTS_NUM];
@@ -33,36 +29,83 @@ float* initVertexData();
 unsigned int* initIndicesData();
 void initGLData();
 
-// simuation
-const int NUM_OF_BALLS = 25;
+// simulation
 const float WORLD_WIDTH = 50.0f;
 const float WORLD_HEIGHT = 50.0f;
 const float FIX_DT = 1.0f / 60.0f;
 const glm::vec2 GRAVITY = glm::vec2(0.0f, -9.81);
-bool useGravity = false;
 const float RESTITUTION = 1.0f;
+const float FLIPPER_HEIGHT = 1.7f;
 
-struct Ball {
+struct Circle {
 	glm::vec2 position;
+	float radius;
+	Circle(glm::vec2 position, float radius): position(position), radius(radius) {}
+};
+
+struct Ball : Circle {
 	glm::vec2 velocity;
 	float mass;
-	float radius;
-	Ball(): position(), velocity(), mass(1.0f), radius(0.5f) {}
+	Ball(): Circle(glm::vec2(), 0.5f), velocity(), mass(1.0f) {}
 	void update(float dt) {
-		if (useGravity) velocity += GRAVITY * dt;
+		velocity += GRAVITY * dt;
 		position += velocity * dt;
 	}
 };
 
+struct Obstacle : Circle {
+	float pushAmount;
+	Obstacle(): Circle(glm::vec2(), 0.5f), pushAmount(2.0f) {}
+	Obstacle(glm::vec2 position, float radius, float pushAmount = 2.0f): Circle(position, radius), pushAmount(pushAmount) {}
+};
+
+struct Flipper {
+	int id;
+
+	glm::vec2 position;
+	float radius;
+	float length;
+	float restAngle;
+	float maxRotation;
+	bool isSignPositive;
+	float angularVelocity;
+	float restitution;
+
+	float currentRotation;
+	float currentAngularVelocity;
+	bool isFlipped;
+
+	Flipper(glm::vec2 position, float radius, float length, float restAngle, float maxRotation, float angularVelocity, float restitution) :
+		id(-1),
+		position(position), radius(radius), length(length), restAngle(restAngle), maxRotation(maxRotation), isSignPositive(maxRotation >= 0.0f),
+		angularVelocity(angularVelocity), restitution(restitution),
+		currentRotation(0.0f), currentAngularVelocity(0.0f), isFlipped(false) {}
+
+	void update(float dt) {
+		float prevRotation = currentRotation;
+		if (isFlipped) currentRotation = glm::min(currentRotation + angularVelocity * dt, maxRotation);
+		else currentRotation = glm::max(currentRotation - angularVelocity * dt, 0.0f);
+	}
+
+	glm::vec2 getFlipperEnd() {
+		float angle = restAngle + (isSignPositive ? 1.0f : -1.0f) * currentRotation;
+		glm::vec2 dir = glm::vec2(glm::cos(angle), glm::sin(angle));
+		return position + dir * length;
+	}
+};
+
 void handleBallCollision(Ball& b1, Ball& b2, float restitution);
-void handleWorldBorder(Ball& ball, float worldWidth, float worldHeight);
-void updateBalls(std::vector<Ball>& balls, float dt);
-void drawBalls(Shader& shader, std::vector<Ball>& balls);
-void update(Shader& shader, std::vector<Ball>& balls, float dt);
+void handleBallObstacleCollision(Ball& ball, Obstacle& obstacle);
+void handleBallFlipperCollision(Ball& ball, Flipper& flipper);
+void handleBallBorderCollision(Ball& ball, std::vector<glm::vec2>& borderPoints);
+void updateSimulation(std::vector<Ball>& balls, std::vector<Obstacle>& obstacles, std::vector<Flipper>& flippers, std::vector<glm::vec2>& borderPoints, float dt);
 
 // rendering
 void drawCircle(Shader& shader, glm::vec3 position, float radius);
-void render(Shader& shader, std::vector<Ball>& balls);
+void renderBalls(Shader& shader, std::vector<Ball>& balls);
+void renderObstacles(Shader& shader, std::vector<Obstacle>& obstacles);
+void renderFlippers(Shader& shader, std::vector<Flipper>& flippers);
+void renderBorder(Shader& shader, std::vector<glm::vec2>& borderPoints);
 
 // controls
 std::map<unsigned, bool> keyDownMap;
@@ -96,36 +139,37 @@ int main() {
 	srand(time(NULL));
 
 	// init gl
-	Shader shader("billiard.vs", "billiard.fs");
+	Shader shader("circle.vs", "circle.fs");
 	initGLData();
 
+	// init simulation
+	float offset = 0.02f;
+
+	std::vector<glm::vec2> borderPoints;
+	borderPoints.push_back(glm::vec2(0.74f, 0.25f));
+	borderPoints.push_back(glm::vec2(1.0f - offset, 0.4f));
+	borderPoints.push_back(glm::vec2(1.0f - offset, FLIPPER_HEIGHT - offset));
+	borderPoints.push_back(glm::vec2(offset, FLIPPER_HEIGHT - offset));
+	borderPoints.push_back(glm::vec2(offset, 0.4f));
+	borderPoints.push_back(glm::vec2(0.26f, 0.25f));
+	borderPoints.push_back(glm::vec2(0.26f, 0.0f));
+	borderPoints.push_back(glm::vec2(0.74f, 0.0f));
+
 	std::vector<Ball> balls;
-	for (int i = 0; i < NUM_OF_BALLS; i++) {
-		float mass = Utils::RandFloat() * 4.0f + 1.0f;
-		float radius = (mass / 5.0f) * 2.0f;
-		glm::vec2 velocity(
-			Utils::RandFloat() * 50.0f - 25.0f,
-			Utils::RandFloat() * 50.0f - 25.0f
-		);
 
-		glm::vec2 position(
-			Utils::RandFloat() * (2.0f * (WORLD_WIDTH * 0.9f)) - (WORLD_WIDTH * 0.9f),
-			Utils::RandFloat() * (2.0f * (WORLD_HEIGHT * 0.9f)) - (WORLD_HEIGHT * 0.9f)
-		);
 
-		Ball ball;
-		ball.mass = mass;
-		ball.radius = radius;
-		ball.velocity = velocity;
-		//ball.velocity = glm::vec2();
-		ball.position = position;
-		balls.emplace_back(ball);
-	}
-
-	// main loop
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
-		update(shader, balls, FIX_DT);
+
+		updateSimulation();
+
+		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		renderBalls();
+		renderFlippers()
+		renderObstacles();
+		renderBorder();
+
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
@@ -140,10 +184,6 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 void processInput(GLFWwindow* window) {
 	if (getKeyDown(window, GLFW_KEY_ESCAPE)) {
 		glfwSetWindowShouldClose(window, true);
-	}
-
-	if (getKeyDown(window, GLFW_KEY_G)) {
-		useGravity = !useGravity;
 	}
 }
 
@@ -172,18 +212,18 @@ void initGLData() {
 	initVertexData();
 	initIndicesData();
 
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
+	glGenVertexArrays(1, &circleVAO);
+	glBindVertexArray(circleVAO);
 
-	glGenBuffers(1, &vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glGenBuffers(1, &circleVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, circleVBO);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * CIRCLE_VERTS_NUM * 3, circleVerts, GL_STATIC_DRAW);
 
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(0);
 
-	glGenBuffers(1, &ebo);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	glGenBuffers(1, &circleEBO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, circleEBO);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * CIRCLE_VERTS_NUM, circleIndices, GL_STATIC_DRAW);
 }
 
@@ -199,17 +239,26 @@ void drawCircle(Shader& shader, glm::vec3 position, float radius) {
 	shader.setVec3("position", position);
 	shader.setVec3("color", glm::vec3(1.0f, 1.0f, 1.0f));
 
-	glBindVertexArray(vao);
+	glBindVertexArray(circleVAO);
 	glDrawElements(GL_TRIANGLE_FAN, CIRCLE_VERTS_NUM, GL_UNSIGNED_INT, 0);
 }
 
-void render(Shader& shader, std::vector<Ball>& balls) {
-	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+void renderBalls(Shader& shader, std::vector<Ball>& balls) {
+	for (const Ball& ball : balls) {
+		drawCircle(shader, glm::vec3(ball.position, 0.0f), ball.radius);
+	}
+}
 
-	drawBalls(shader, balls);
-	//drawCircle(shader, glm::vec3(0, 0, 0), 1.0f);
-	//drawCircle(shader, glm::vec3(-2, 0, 0), RENDER_SCALE);
+void renderObstacles(Shader& shader, std::vector<Obstacle>& obstacles) {
+	for (const Obstacle& obstacle : obstacles) {
+		drawCircle(shader, glm::vec3(obstacle.position, 0.0f), obstacle.radius);
+	}
+}
+void renderFlippers(Shader& shader, std::vector<Flipper>& flippers) {
+
+}
+void renderBorder(Shader& shader, std::vector<glm::vec2>& borderPoints) {
+
 }
 
 void handleBallCollision(Ball& b1, Ball& b2, float restitution) {
@@ -236,6 +285,86 @@ void handleBallCollision(Ball& b1, Ball& b2, float restitution) {
 	b2.velocity += dir * (newV2 - v2);
 }
 
+void handleBallObstacleCollision(Ball& ball, Obstacle& obstacle) {
+	glm::vec2 dir = ball.position - obstacle.position;
+	float distance = glm::length(dir);
+	if (distance == 0.0f || distance > ball.radius + obstacle.radius) return;
+
+	dir = glm::normalize(dir);
+
+	float correction = ball.radius + obstacle.radius - distance;
+	ball.position += dir * correction;
+
+	float v = glm::dot(ball.velocity, dir);
+	ball.velocity += dir * (obstacle.pushAmount - v);
+}
+
+void handleBallFlipperCollision(Ball& ball, Flipper& flipper) {
+	glm::vec2 closest = Utils::getClosestPointOnSegment(ball.position, flipper.position, flipper.getFlipperEnd());
+	glm::vec2 dir = ball.position - closest;
+	float distance = glm::length(dir);
+	if (distance == 0.0f || distance > ball.radius + flipper.radius) return;
+
+	dir = glm::normalize(dir);
+
+	float correction = ball.radius + flipper.radius - distance;
+	ball.position += dir * correction;
+
+	glm::vec2 r = closest;
+	r += dir * flipper.radius;
+	r -= flipper.position;
+	glm::vec2 surfaceVelocity = Utils::getPerpendicular(r);
+	surfaceVelocity *= flipper.currentAngularVelocity;
+
+	float v = glm::dot(ball.velocity, dir);
+	float newV = glm::dot(surfaceVelocity, dir);
+
+	ball.velocity += dir * (newV - v);
+}
+
+void handleBallBorderCollision(Ball& ball, std::vector<glm::vec2>& borderPoints) {
+	if (borderPoints.size() < 3) return;
+
+	glm::vec2 d, closest, ab, normal;
+	float minDist = 0.0f;
+	int n = borderPoints.size();
+	for (int i = 0; i < n; i++) {
+		glm::vec2 a = borderPoints.at(i);
+		glm::vec2 b = borderPoints.at((i + 1) % n);
+		glm::vec2 c = Utils::getClosestPointOnSegment(ball.position, a, b);
+		d = ball.position - c;
+		float distance = glm::length(d);
+		if (i == 0 || distance < minDist) {
+			minDist = distance;
+			closest = c;
+			ab = b - a;
+			normal = Utils::getPerpendicular(ab);
+		}
+	}
+
+	d = ball.position - closest;
+	float distance = glm::length(d);
+	if (distance == 0.0f) {
+		d = normal;
+		distance = glm::length(normal);
+	}
+	d = glm::normalize(d);
+
+	if (glm::dot(d, normal) >= 0.0f) {
+		if (distance > ball.radius) return;
+
+		ball.position += d * (ball.radius - distance);
+	}
+	else {
+		ball.position += d * (distance + ball.radius);
+	}
+
+	float v = glm::dot(ball.velocity, d);
+	float newV = glm::abs(v) * RESTITUTION;
+
+	ball.velocity += d * (newV - v);
+}
+
 void handleWorldBorder(Ball& ball, float worldWidth, float worldHeight) {
 	if (ball.position.x < -(worldWidth / 2.0f) + ball.radius) {
 		ball.position.x = -(worldWidth / 2.0f) + ball.radius;
@@ -256,31 +385,29 @@ void handleWorldBorder(Ball& ball, float worldWidth, float worldHeight) {
 	}
 }
 
-void updateBalls(std::vector<Ball>& balls, float dt) {
+void updateSimulation(std::vector<Ball>& balls, std::vector<Obstacle>& obstacles, std::vector<Flipper>& flippers, std::vector<glm::vec2>& borderPoints, float dt) {
+	for (Flipper& flipper : flippers) {
+		flipper.update(dt);
+	}
+
 	int n = balls.size();
 	for (int i = 0; i < n; i++) {
-		Ball& b1 = balls[i];
-		b1.update(dt);
+		Ball& ball = balls[i];
+		ball.update(dt);
 
 		for (int j = i + 1; j < n; j++) {
-			Ball& b2 = balls[j];
-			handleBallCollision(b1, b2, RESTITUTION);
+			Ball& otherBall = balls[j];
+			handleBallCollision(ball, otherBall, RESTITUTION);
 		}
 
-		handleWorldBorder(b1, WORLD_WIDTH, WORLD_HEIGHT);
-	}
-}
+		for (Obstacle& obstacle : obstacles)
+			handleBallObstacleCollision(ball, obstacle);
 
-void drawBalls(Shader& shader, std::vector<Ball>& balls) {
-	for (const Ball& ball : balls) {
-		drawCircle(shader, glm::vec3(ball.position, 0.0f), ball.radius);
-	}
-}
+		for (Flipper& flipper : flippers)
+			handleBallFlipperCollision(ball, flipper);
 
-void update(Shader& shader, std::vector<Ball>& balls, float dt) {
-	updateBalls(balls, dt);
-	render(shader, balls);
-	//drawBalls(shader, balls);
+		handleBallBorderCollision(ball, borderPoints);
+	}
 }
 
 bool getKeyDown(GLFWwindow* window, unsigned int key) {
