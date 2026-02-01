@@ -86,9 +86,9 @@ struct Flipper {
 	float currentAngularVelocity;
 	bool isFlipped;
 
-	Flipper(glm::vec2 position, float radius, float length, float restAngle, float maxRotation, float angularVelocity, float restitution) :
+	Flipper(glm::vec2 position, float radius, float length, float restAngle, float maxRotation, float angularVelocity, float restitution, bool positiveSign = true) :
 		id(-1),
-		position(position), radius(radius), length(length), restAngle(restAngle), maxRotation(maxRotation), isSignPositive(maxRotation >= 0.0f),
+		position(position), radius(radius), length(length), restAngle(restAngle), maxRotation(maxRotation), isSignPositive(positiveSign),
 		angularVelocity(angularVelocity), restitution(restitution),
 		currentRotation(0.0f), currentAngularVelocity(0.0f), isFlipped(false) {}
 
@@ -406,7 +406,7 @@ void resetScene() {
 	obstacles.push_back(Obstacle(glm::vec2(-5.0f, 4.2f), 4.0f));
 
 	float radius = 1.0f;
-	float length = 10.0f;
+	float length = 12.5f;
 	float maxRotation = Utils::deg2Rad(45.0f);
 	float restAngle = Utils::deg2Rad(0.0f);
 	float angularVelocity = 10.0f;
@@ -414,7 +414,7 @@ void resetScene() {
 	glm::vec2 pos1 = glm::vec2(-15.0f, -32.0f);
 	glm::vec2 pos2 = glm::vec2(15.0f, -32.0f);
 	flippers.push_back(Flipper(pos1, radius, length, -restAngle, maxRotation, angularVelocity, restitution));
-	flippers.push_back(Flipper(pos2, radius, length, Utils::PI + restAngle, -maxRotation, angularVelocity, restitution));
+	flippers.push_back(Flipper(pos2, radius, length, Utils::PI + restAngle, maxRotation, angularVelocity, restitution, false));
 	flippers[0].id = 0;
 	flippers[1].id = 1;
 }
