@@ -47,6 +47,7 @@ const glm::vec2 GRAVITY = glm::vec2(0.0f, -9.81);
 const float RESTITUTION = 0.2f;
 const float FLIPPER_HEIGHT = 1.7f;
 const float BORDER_SIZE = 0.5f;
+const int PHYSICS_SUBSTEPS = 4;
 
 struct Circle {
 	glm::vec2 position;
@@ -137,7 +138,7 @@ int main() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	window = glfwCreateWindow(WIDTH, HEIGHT, "2D_Billiard", NULL, NULL);
+	window = glfwCreateWindow(WIDTH, HEIGHT, "2D_Pinball", NULL, NULL);
 
 	if (window == NULL) {
 		std::cout << "Failed to create GLFW window" << std::endl;
@@ -168,7 +169,9 @@ int main() {
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
 
-		updateSimulation(balls, obstacles, flippers, borderPoints, FIX_DT);
+		for (int i = 0; i < PHYSICS_SUBSTEPS; i++) {
+			updateSimulation(balls, obstacles, flippers, borderPoints, FIX_DT / (float)PHYSICS_SUBSTEPS);
+		}
 
 		// render
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
