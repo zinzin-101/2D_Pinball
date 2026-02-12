@@ -141,6 +141,8 @@
     <None Include="square.vs" />
     <None Include="circle.fs" />
     <None Include="circle.vs" />
+    <None Include="texture.fs" />
+    <None Include="texture.vs" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Utils.h" />

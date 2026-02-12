@@ -27,6 +27,8 @@
     <None Include="circle.vs" />
     <None Include="square.vs" />
     <None Include="square.fs" />
+    <None Include="texture.vs" />
+    <None Include="texture.fs" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Utils.h">
