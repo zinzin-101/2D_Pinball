@@ -46,15 +46,15 @@ void initSquareData();
 void initGLData();
 
 // simulation
-const float WORLD_WIDTH = 100.0f;
-const float WORLD_HEIGHT = 100.0f;
+const float WORLD_WIDTH = 85.0f;
+const float WORLD_HEIGHT = 85.0f;
 const float FIX_DT = 1.0f / 60.0f;
 float deltaTime = 0.0f;
 float lastTime  = 0.0f;
 const glm::vec2 GRAVITY = glm::vec2(0.0f, -9.81) * 10.0f;
 const float RESTITUTION = 0.2f;
 const float FLIPPER_HEIGHT = 1.7f;
-const float BORDER_SIZE = 0.5f;
+const float BORDER_SIZE = 2.5f;
 
 struct Circle {
 	glm::vec2 position;
@@ -176,22 +176,24 @@ struct Texture {
 
 struct Sprite {
 	Shader& shader;
+	Texture texture;
 	GLuint quadVAO;
-	Sprite(Shader& shader): shader(shader) {
+	Sprite(Shader& shader, Texture texture): shader(shader), texture(texture) {
 		initRenderData();
 	}
 
-	~Sprite() {
+	virtual ~Sprite() {
 		glDeleteVertexArrays(1, &this->quadVAO);
 	}
 
-	void drawSprite(Texture& texture, glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color) {
-		this->shader.use();
+	virtual void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color, bool isRadian = false) {
+		shader.use();
 		glm::mat4 model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(position));
 
 		model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
-		model = glm::rotate(model, glm::radians(rotation), glm::vec3(0.0f, 0.0f, 1.0f));
+		float angle = isRadian ? rotation : glm::radians(rotation);
+		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
 		//model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 
 		model = glm::scale(model, glm::vec3(size));
@@ -203,11 +205,10 @@ struct Sprite {
 		);
 
 
-		this->shader.setMat4("model", model);
-		this->shader.setMat4("projection", projection);
-
-		// render textured quad
-		this->shader.setVec3("color", color);
+		shader.setMat4("model", model);
+		shader.setMat4("projection", projection);
+		shader.setBool("enableTiling", false);
+		shader.setVec3("color", color);
 
 		glActiveTexture(GL_TEXTURE0);
 		texture.bind();
@@ -244,7 +245,50 @@ struct Sprite {
 	}
 };
 
+struct SquareLineSprite : Sprite {
+	SquareLineSprite(Shader& shader, Texture texture): Sprite(shader, texture) {}
+	virtual void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color, bool isRadian = false) override {
+		this->shader.use();
+		glm::mat4 model = glm::mat4(1.0f);
+		model = glm::translate(model, glm::vec3(position));
+
+		model = glm::translate(model, glm::vec3(0.0f, -0.5f * size.y, 0.0f));
+		float angle = isRadian ? rotation : glm::radians(rotation);
+		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
+
+		model = glm::scale(model, glm::vec3(size));
+
+		glm::mat4 projection = glm::ortho(
+			-(WORLD_WIDTH / 2.0f), (WORLD_WIDTH / 2.0f),
+			-(WORLD_HEIGHT / 2.0f), (WORLD_HEIGHT / 2.0f),
+			-1.0f, 1.0f
+		);
+
+
+		shader.setMat4("model", model);
+		shader.setMat4("projection", projection);
+		shader.setBool("enableTiling", false);
+		shader.setVec3("color", color);
+
+		glActiveTexture(GL_TEXTURE0);
+		texture.bind();
+
+		glBindVertexArray(this->quadVAO);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		glBindVertexArray(0);
+	}
+};
+
 Texture loadTextureFromFile(const char* filename, bool hasAlpha);
+void drawTexturedSquareLine(Sprite* sprite, glm::vec3 startPos, glm::vec3 endPos, float radius);
+
+enum ObjectType {
+	BALL,
+	OBSTACLE,
+	BORDER,
+	FLIPPER
+};
+Sprite* objectToSprite[4];
 
 // controls
 std::map<unsigned, bool> keyDownMap;
@@ -291,8 +335,11 @@ int main() {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	Sprite testSprite = Sprite(textureShader);
-	Texture testTexture = loadTextureFromFile((FileSystem::getPath("resources/enemyTexture.png").c_str()), true);
+	//Sprite testSprite = SquareLineSprite(textureShader);
+	//SquareLineSprite testSprite2 = SquareLineSprite(textureShader);
+	//Texture testTexture = loadTextureFromFile((FileSystem::getPath("resources/enemyTexture.png").c_str()), true);
+	SquareLineSprite borderSprite = SquareLineSprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/stone.png").c_str()), true));
+	objectToSprite[BORDER] = &borderSprite;
 
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
@@ -312,7 +359,8 @@ int main() {
 		renderBorder(squareShader, borderPoints);
 
 		// test
-		testSprite.drawSprite(testTexture, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(10.f), 0.0f, glm::vec3(1.0f));
+		//testSprite.drawSprite(testTexture, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(10.f), 0.0f, glm::vec3(1.0f));
+		//testSprite2.drawSprite(testTexture, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(10.f), 0.0f, glm::vec3(0.0f, 1.0, 0.0f));
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -546,14 +594,15 @@ void renderBorder(Shader& shader, std::vector<glm::vec2>& borderPoints) {
 	for (int i = 0; i < n; i++) {
 		glm::vec3 startPos = glm::vec3(borderPoints[i], 0.0f);
 		glm::vec3 endPos = glm::vec3(borderPoints[(i + 1) % n], 0.0f);
-		drawSquareLine(shader, startPos, endPos, BORDER_SIZE, glm::vec3(1.0f, 1.0f, 1.0f));
+		//drawSquareLine(shader, startPos, endPos, BORDER_SIZE, glm::vec3(1.0f, 1.0f, 1.0f));
+		drawTexturedSquareLine(objectToSprite[BORDER], startPos, endPos, BORDER_SIZE);
 	}
 
 	#ifdef DRAW_DEBUG
 	for (int i = 0; i < n; i++) {
 		glm::vec3 startPos = glm::vec3(borderPoints[i], 0.0f);
 		glm::vec3 endPos = glm::vec3(borderPoints[(i + 1) % n], 0.0f);
-		drawSquareLine(shader, startPos, endPos, BORDER_SIZE, glm::vec3(1.0f, 1.0f, 1.0f));
+		drawSquareOutline(shader, startPos, endPos, BORDER_SIZE);
 	}
 	#endif
 }
@@ -606,14 +655,14 @@ void resetScene() {
 	obstacles.clear();
 
 	// init simulation
-	borderPoints.push_back(glm::vec2(-25.0f, 25.0f));
-	borderPoints.push_back(glm::vec2(-25.0f, -25.0f));
+	borderPoints.push_back(glm::vec2(-25.0f, 35.0f));
+	borderPoints.push_back(glm::vec2(-25.0f, -15.0f));
+	borderPoints.push_back(glm::vec2(-15.0f, -20.0f));
 	borderPoints.push_back(glm::vec2(-15.0f, -30.0f));
-	borderPoints.push_back(glm::vec2(-15.0f, -40.0f));
-	borderPoints.push_back(glm::vec2(15.0f, -40.0f));
 	borderPoints.push_back(glm::vec2(15.0f, -30.0f));
-	borderPoints.push_back(glm::vec2(25.0f, -25.0f));
-	borderPoints.push_back(glm::vec2(25.0f, 25.0f));
+	borderPoints.push_back(glm::vec2(15.0f, -20.0f));
+	borderPoints.push_back(glm::vec2(25.0f, -15.0f));
+	borderPoints.push_back(glm::vec2(25.0f, 35.0f));
 
 	Ball ball;
 	ball.radius = 1.0f;
@@ -638,8 +687,8 @@ void resetScene() {
 	float restAngle = Utils::deg2Rad(0.0f);
 	float angularVelocity = 10.0f;
 	float restitution = 0.0f;
-	glm::vec2 pos1 = glm::vec2(-15.0f, -32.0f);
-	glm::vec2 pos2 = glm::vec2(15.0f, -32.0f);
+	glm::vec2 pos1 = glm::vec2(-15.0f, -22.0f);
+	glm::vec2 pos2 = glm::vec2(15.0f, -22.0f);
 	flippers.push_back(Flipper(pos1, radius, length, -restAngle, maxRotation, angularVelocity, restitution));
 	flippers.push_back(Flipper(pos2, radius, length, Utils::PI + restAngle, maxRotation, angularVelocity, restitution, false));
 	flippers[0].id = 0;
@@ -688,11 +737,11 @@ void handleBallFlipperCollision(Ball& ball, Flipper& flipper) {
 	glm::vec2 closest = Utils::getClosestPointOnSegment(ball.position, flipper.position, flipper.getFlipperEnd());
 	glm::vec2 dir = ball.position - closest;
 	float distance = glm::length(dir);
-	if (distance == 0.0f || distance > ball.radius + flipper.radius) return;
+	if (distance == 0.0f || distance > ball.radius + flipper.radius * 0.5f) return;
 
 	dir = glm::normalize(dir);
 
-	float correction = ball.radius + flipper.radius - distance;
+	float correction = ball.radius + flipper.radius * 0.5f - distance;
 	ball.position += dir * correction;
 
 	glm::vec2 r = closest;
@@ -736,12 +785,12 @@ void handleBallBorderCollision(Ball& ball, std::vector<glm::vec2>& borderPoints)
 	d = glm::normalize(d);
 
 	if (glm::dot(d, normal) >= 0.0f) {
-		if (distance > ball.radius ) return;
+		if (distance > ball.radius + BORDER_SIZE * 0.5f) return;
 
-		ball.position += d * (ball.radius - distance);
+		ball.position += d * (ball.radius - distance + BORDER_SIZE * 0.5f);
 	}
 	else {
-		ball.position += d * -(distance + ball.radius);
+		ball.position += d * -(distance + ball.radius - BORDER_SIZE * 0.5f);
 	}
 
 	float v = glm::dot(ball.velocity, d);
@@ -808,4 +857,16 @@ Texture loadTextureFromFile(const char* filename, bool hasAlpha) {
 	texture.generate(width, height, data);
 	stbi_image_free(data);
 	return texture;
+}
+
+void drawTexturedSquareLine(Sprite* sprite, glm::vec3 startPos, glm::vec3 endPos, float radius) {
+	glm::vec2 startToEnd = endPos - startPos;
+	float length = glm::length(startToEnd);
+	glm::vec2 dir = glm::normalize(startToEnd);
+	float angle = glm::atan(dir.y, dir.x);
+
+	sprite->shader.use();
+	sprite->shader.setBool("enableTiling", true);
+	sprite->shader.setVec2("tiling", length * 0.5f, radius * 0.5f);
+	sprite->drawSprite(startPos, glm::vec3(length, radius, 0.0f), angle, glm::vec3(1.0f), true);
 }
