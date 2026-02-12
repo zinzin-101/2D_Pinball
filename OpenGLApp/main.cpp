@@ -45,7 +45,9 @@ void initGLData();
 const float WORLD_WIDTH = 100.0f;
 const float WORLD_HEIGHT = 100.0f;
 const float FIX_DT = 1.0f / 60.0f;
-const glm::vec2 GRAVITY = glm::vec2(0.0f, -9.81);
+float fixDt;
+int refreshRate;
+const glm::vec2 GRAVITY = glm::vec2(0.0f, -9.81) * 10.0f;
 const float RESTITUTION = 0.2f;
 const float FLIPPER_HEIGHT = 1.7f;
 const float BORDER_SIZE = 0.5f;
@@ -163,6 +165,11 @@ int main() {
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	glfwSetMouseButtonCallback(window, mouse_button_callback);
 
+	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode* monitorMode = glfwGetVideoMode(monitor);
+	refreshRate = monitorMode->refreshRate;
+	fixDt = 1.0f / (float)refreshRate;
+
 	srand(time(NULL));
 
 	// init gl
@@ -175,7 +182,7 @@ int main() {
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
 
-		updateSimulation(balls, obstacles, flippers, borderPoints, FIX_DT);
+		updateSimulation(balls, obstacles, flippers, borderPoints, fixDt);
 
 		// render
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
