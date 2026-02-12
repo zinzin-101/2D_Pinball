@@ -246,16 +246,18 @@ struct Sprite {
 };
 
 struct SquareLineSprite : Sprite {
-	SquareLineSprite(Shader& shader, Texture texture): Sprite(shader, texture) {}
+	bool useTiling;
+	float spriteScale;
+	SquareLineSprite(Shader& shader, Texture texture): Sprite(shader, texture), useTiling(false), spriteScale(1.0f) {}
 	virtual void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color, bool isRadian = false) override {
 		this->shader.use();
 		glm::mat4 model = glm::mat4(1.0f);
 
-		model = glm::translate(model, glm::vec3(0.0f, -0.5f * size.y, 0.0f));
-		model = glm::scale(model, glm::vec3(size));
+		model = glm::translate(model, glm::vec3(position));
 		float angle = isRadian ? rotation : glm::radians(rotation);
 		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
-		model = glm::translate(model, glm::vec3(position));
+		model = glm::translate(model, glm::vec3(0.0f, -0.5f * size.y, 0.0f));
+		model = glm::scale(model, glm::vec3(size));
 
 
 		glm::mat4 projection = glm::ortho(
@@ -267,7 +269,8 @@ struct SquareLineSprite : Sprite {
 
 		shader.setMat4("model", model);
 		shader.setMat4("projection", projection);
-		shader.setBool("enableTiling", false);
+		shader.setBool("enableTiling", useTiling);
+		shader.setVec2("tiling", size.x * spriteScale, size.y * spriteScale);
 		shader.setVec3("color", color);
 
 		glActiveTexture(GL_TEXTURE0);
@@ -289,6 +292,7 @@ enum ObjectType {
 	FLIPPER
 };
 Sprite* objectToSprite[4];
+const float BORDER_SPRITE_SCALE = 0.1f;
 
 // controls
 std::map<unsigned, bool> keyDownMap;
@@ -339,6 +343,8 @@ int main() {
 	//SquareLineSprite testSprite2 = SquareLineSprite(textureShader);
 	//Texture testTexture = loadTextureFromFile((FileSystem::getPath("resources/enemyTexture.png").c_str()), true);
 	SquareLineSprite borderSprite = SquareLineSprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/stone.png").c_str()), true));
+	borderSprite.useTiling = true;
+	borderSprite.spriteScale = BORDER_SPRITE_SCALE;
 	objectToSprite[BORDER] = &borderSprite;
 
 	while (!glfwWindowShouldClose(window)) {
@@ -865,8 +871,5 @@ void drawTexturedSquareLine(Sprite* sprite, glm::vec3 startPos, glm::vec3 endPos
 	glm::vec2 dir = glm::normalize(startToEnd);
 	float angle = glm::atan(dir.y, dir.x);
 
-	sprite->shader.use();
-	sprite->shader.setBool("enableTiling", true);
-	sprite->shader.setVec2("tiling", length * 0.5f, radius * 0.5f);
 	sprite->drawSprite(startPos, glm::vec3(length, radius, 0.0f), angle, glm::vec3(1.0f), true);
 }
