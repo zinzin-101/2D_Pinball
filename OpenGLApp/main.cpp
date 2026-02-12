@@ -31,8 +31,10 @@ unsigned int* initCircleIndicesData();
 void initCircleData();
 
 GLuint squareVAO, squareVBO, squareEBO;
+GLuint squareOutlineVAO, squareOutlineVBO, squareOutlineEBO;
 float squareVerts[4 * 3];
 unsigned int squareIndices[6];
+unsigned int outlineIndices[5];
 float* initSquareVertexData();
 unsigned int* initSquareIndicesData();
 void initSquareData();
@@ -125,6 +127,11 @@ void renderBalls(Shader& shader, std::vector<Ball>& balls);
 void renderObstacles(Shader& shader, std::vector<Obstacle>& obstacles);
 void renderFlippers(Shader& shader, std::vector<Flipper>& flippers);
 void renderBorder(Shader& shader, std::vector<glm::vec2>& borderPoints);
+
+// debugging
+#define DRAW_DEBUG
+void drawSquareOutline(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, float radius);
+void drawCircleOutline(Shader& shader, glm::vec3 position, float radius);
 
 // controls
 std::map<unsigned, bool> keyDownMap;
@@ -258,6 +265,12 @@ unsigned int* initSquareIndicesData() {
 	squareIndices[4] = 2;
 	squareIndices[5] = 3;
 
+	outlineIndices[0] = 0;
+	outlineIndices[1] = 1;
+	outlineIndices[2] = 2;
+	outlineIndices[3] = 3;
+	outlineIndices[4] = 0;
+
 	return squareIndices;
 }
 
@@ -284,6 +297,7 @@ void initSquareData() {
 	initSquareVertexData();
 	initSquareIndicesData();
 
+	// square
 	glGenVertexArrays(1, &squareVAO);
 	glBindVertexArray(squareVAO);
 
@@ -297,6 +311,21 @@ void initSquareData() {
 	glGenBuffers(1, &squareEBO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, squareEBO);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 6, squareIndices, GL_STATIC_DRAW);
+
+	// square outline
+	glGenVertexArrays(1, &squareOutlineVAO);
+	glBindVertexArray(squareOutlineVAO);
+
+	glGenBuffers(1, &squareOutlineVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, squareOutlineVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 4 * 3, squareVerts, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(0);
+
+	glGenBuffers(1, &squareOutlineEBO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, squareOutlineEBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * 5, outlineIndices, GL_STATIC_DRAW);
 }
 
 void initGLData() {
@@ -349,12 +378,24 @@ void renderBalls(Shader& shader, std::vector<Ball>& balls) {
 	for (const Ball& ball : balls) {
 		drawCircle(shader, glm::vec3(ball.position, 0.0f), ball.radius, glm::vec3(1.0f));
 	}
+
+	#ifdef DRAW_DEBUG
+	for (const Ball& ball : balls) {
+		drawCircleOutline(shader, glm::vec3(ball.position, 0.0f), ball.radius);
+	}
+	#endif
 }
 
 void renderObstacles(Shader& shader, std::vector<Obstacle>& obstacles) {
 	for (const Obstacle& obstacle : obstacles) {
 		drawCircle(shader, glm::vec3(obstacle.position, 0.0f), obstacle.radius, glm::vec3(1.0f, 1.0f, 0.0f));
 	}
+
+	#ifdef DRAW_DEBUG
+	for (const Obstacle& obstacle : obstacles) {
+		drawCircleOutline(shader, glm::vec3(obstacle.position, 0.0f), obstacle.radius);
+	}
+	#endif
 }
 void renderFlippers(Shader& shader, std::vector<Flipper>& flippers) {
 	for (const Flipper& flipper : flippers) {
@@ -362,6 +403,14 @@ void renderFlippers(Shader& shader, std::vector<Flipper>& flippers) {
 		glm::vec3 endPos = glm::vec3(flipper.getFlipperEnd(), 0.0f);
 		drawSquareLine(shader, startPos, endPos, flipper.radius, glm::vec3(1.0f, 0.0f, 0.0f));
 	}
+
+	#ifdef DRAW_DEBUG
+	for (const Flipper& flipper : flippers) {
+		glm::vec3 startPos = glm::vec3(flipper.position, 0.0f);
+		glm::vec3 endPos = glm::vec3(flipper.getFlipperEnd(), 0.0f);
+		drawSquareOutline(shader, startPos, endPos, flipper.radius);
+	}
+	#endif
 }
 void renderBorder(Shader& shader, std::vector<glm::vec2>& borderPoints) {
 	int n = borderPoints.size();
@@ -370,6 +419,55 @@ void renderBorder(Shader& shader, std::vector<glm::vec2>& borderPoints) {
 		glm::vec3 endPos = glm::vec3(borderPoints[(i + 1) % n], 0.0f);
 		drawSquareLine(shader, startPos, endPos, BORDER_SIZE, glm::vec3(1.0f, 1.0f, 1.0f));
 	}
+
+	#ifdef DRAW_DEBUG
+	for (int i = 0; i < n; i++) {
+		glm::vec3 startPos = glm::vec3(borderPoints[i], 0.0f);
+		glm::vec3 endPos = glm::vec3(borderPoints[(i + 1) % n], 0.0f);
+		drawSquareLine(shader, startPos, endPos, BORDER_SIZE, glm::vec3(1.0f, 1.0f, 1.0f));
+	}
+	#endif
+}
+
+void drawSquareOutline(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, float radius) {
+	shader.use();
+	glm::mat4 projection = glm::ortho(
+		-(WORLD_WIDTH / 2.0f), (WORLD_WIDTH / 2.0f),
+		-(WORLD_HEIGHT / 2.0f), (WORLD_HEIGHT / 2.0f),
+		-1.0f, 1.0f
+	);
+
+	glm::mat4 view(1.0f);
+	glm::vec2 startToEnd = endPos - startPos;
+	float length = glm::length(startToEnd);
+	glm::vec2 dir = glm::normalize(startToEnd);
+	float angle = glm::atan(dir.y, dir.x);
+	glm::mat4 model = glm::translate(glm::mat4(1.0f), startPos) *
+		glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 0.0f, 1.0f)) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(length, radius, 0.0f)) * glm::mat4(1.0f);
+	shader.setMat4("projection", projection);
+	shader.setMat4("view", view);
+	shader.setMat4("model", model);
+	shader.setVec3("color", glm::vec3(0.0f, 1.0f, 0.0f));
+
+	glBindVertexArray(squareOutlineVAO);
+	glDrawElements(GL_LINES, 15, GL_UNSIGNED_INT, 0);
+}
+
+void drawCircleOutline(Shader& shader, glm::vec3 position, float radius) {
+	shader.use();
+	glm::mat4 projection = glm::ortho(
+		-(WORLD_WIDTH / 2.0f), (WORLD_WIDTH / 2.0f),
+		-(WORLD_HEIGHT / 2.0f), (WORLD_HEIGHT / 2.0f),
+		-1.0f, 1.0f
+	);
+	shader.setMat4("projection", projection);
+	shader.setFloat("scale", radius);
+	shader.setVec3("position", position);
+	shader.setVec3("color", glm::vec3(0.0f, 1.0f, 0.0f));
+
+	glBindVertexArray(circleVAO);
+	glDrawElements(GL_LINES, CIRCLE_VERTS_NUM, GL_UNSIGNED_INT, 0);
 }
 
 void resetScene() {
