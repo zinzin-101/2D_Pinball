@@ -182,7 +182,7 @@ struct Sprite {
 		model = glm::rotate(model, glm::radians(rotation), glm::vec3(0.0f, 0.0f, 1.0f));
 		model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 
-		model = glm::scale(model, glm::vec3(size)); // last scale
+		model = glm::scale(model, glm::vec3(size));
 
 		this->shader.setMat4("model", model);
 
