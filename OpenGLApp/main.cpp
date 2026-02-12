@@ -135,6 +135,95 @@ void renderBorder(Shader& shader, std::vector<glm::vec2>& borderPoints);
 void drawSquareOutline(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, float radius);
 void drawCircleOutline(Shader& shader, glm::vec3 position, float radius);
 
+// visual
+struct Texture {
+	unsigned int id;
+	unsigned int width, height;
+	unsigned int internalFormat;
+	unsigned int imageFormat;
+	unsigned int wrapS;
+	unsigned int wrapT;
+	Texture() : width(0), height(0), internalFormat(GL_RGB), imageFormat(GL_RGB), wrapS(GL_REPEAT), wrapT(GL_REPEAT) {
+		glGenTextures(1, &this->id);
+	}
+
+	void generate(unsigned int width, unsigned int height, unsigned char* data) {
+		this->width = width;
+		this->height = height;
+		// create Texture
+		glBindTexture(GL_TEXTURE_2D, this->id);
+		glTexImage2D(GL_TEXTURE_2D, 0, this->internalFormat, width, height, 0, this->imageFormat, GL_UNSIGNED_BYTE, data);
+		// set Texture wrap and filter modes
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, this->wrapS);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, this->wrapT);
+
+		// unbind texture
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
+	void bind() {
+		glBindTexture(GL_TEXTURE_2D, id);
+	}
+};
+
+struct Sprite {
+	Shader& shader;
+	GLuint quadVAO;
+	Sprite(Shader& shader): shader(shader) {
+		initRenderData();
+	}
+
+	void drawSprite(Texture& texture, glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color) {
+		this->shader.use();
+		glm::mat4 model = glm::mat4(1.0f);
+		model = glm::translate(model, glm::vec3(position));
+
+		model = glm::translate(model, glm::vec3(0.5f * size.x, 0.5f * size.y, 0.0f));
+		model = glm::rotate(model, glm::radians(rotation), glm::vec3(0.0f, 0.0f, 1.0f));
+		model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
+
+		model = glm::scale(model, glm::vec3(size)); // last scale
+
+		this->shader.setMat4("model", model);
+
+		// render textured quad
+		this->shader.setVec3("color", color);
+
+		glActiveTexture(GL_TEXTURE0);
+		texture.bind();
+
+		glBindVertexArray(this->quadVAO);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		glBindVertexArray(0);
+	}
+
+	void initRenderData() {
+		unsigned int vbo;
+		float vertices[] = {
+			// pos      // tex
+			0.0f, 1.0f, 0.0f, 1.0f,
+			1.0f, 0.0f, 1.0f, 0.0f,
+			0.0f, 0.0f, 0.0f, 0.0f,
+
+			0.0f, 1.0f, 0.0f, 1.0f,
+			1.0f, 1.0f, 1.0f, 1.0f,
+			1.0f, 0.0f, 1.0f, 0.0f
+		};
+
+		glGenVertexArrays(1, &this->quadVAO);
+		glGenBuffers(1, &vbo);
+
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+		glBindVertexArray(this->quadVAO);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+	}
+};
+
 // controls
 std::map<unsigned, bool> keyDownMap;
 bool getKeyDown(GLFWwindow* window, unsigned int key);
