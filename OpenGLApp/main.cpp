@@ -2,8 +2,12 @@
 #include <GLFW/glfw3.h>
 
 #include <shader.h>
+#include <filesystem.h>
 
 #include "Utils.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #include <iostream>
 #include <thread>
@@ -45,8 +49,8 @@ void initGLData();
 const float WORLD_WIDTH = 100.0f;
 const float WORLD_HEIGHT = 100.0f;
 const float FIX_DT = 1.0f / 60.0f;
-float fixDt;
-int refreshRate;
+float deltaTime = 0.0f;
+float lastTime  = 0.0f;
 const glm::vec2 GRAVITY = glm::vec2(0.0f, -9.81) * 10.0f;
 const float RESTITUTION = 0.2f;
 const float FLIPPER_HEIGHT = 1.7f;
@@ -137,13 +141,15 @@ void drawCircleOutline(Shader& shader, glm::vec3 position, float radius);
 
 // visual
 struct Texture {
-	unsigned int id;
+	GLuint id;
 	unsigned int width, height;
 	unsigned int internalFormat;
 	unsigned int imageFormat;
 	unsigned int wrapS;
 	unsigned int wrapT;
-	Texture() : width(0), height(0), internalFormat(GL_RGB), imageFormat(GL_RGB), wrapS(GL_REPEAT), wrapT(GL_REPEAT) {
+	unsigned int filterMin;
+	unsigned int filterMax;
+	Texture() : width(0), height(0), internalFormat(GL_RGB), imageFormat(GL_RGB), wrapS(GL_REPEAT), wrapT(GL_REPEAT), filterMin(GL_LINEAR), filterMax(GL_LINEAR) {
 		glGenTextures(1, &this->id);
 	}
 
@@ -151,11 +157,13 @@ struct Texture {
 		this->width = width;
 		this->height = height;
 		// create Texture
-		glBindTexture(GL_TEXTURE_2D, this->id);
-		glTexImage2D(GL_TEXTURE_2D, 0, this->internalFormat, width, height, 0, this->imageFormat, GL_UNSIGNED_BYTE, data);
+		glBindTexture(GL_TEXTURE_2D, id);
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, imageFormat, GL_UNSIGNED_BYTE, data);
 		// set Texture wrap and filter modes
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, this->wrapS);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, this->wrapT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filterMin);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filterMax);
 
 		// unbind texture
 		glBindTexture(GL_TEXTURE_2D, 0);
@@ -173,18 +181,30 @@ struct Sprite {
 		initRenderData();
 	}
 
+	~Sprite() {
+		glDeleteVertexArrays(1, &this->quadVAO);
+	}
+
 	void drawSprite(Texture& texture, glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color) {
 		this->shader.use();
 		glm::mat4 model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(position));
 
-		model = glm::translate(model, glm::vec3(0.5f * size.x, 0.5f * size.y, 0.0f));
-		model = glm::rotate(model, glm::radians(rotation), glm::vec3(0.0f, 0.0f, 1.0f));
 		model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
+		model = glm::rotate(model, glm::radians(rotation), glm::vec3(0.0f, 0.0f, 1.0f));
+		//model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 
 		model = glm::scale(model, glm::vec3(size));
 
+		glm::mat4 projection = glm::ortho(
+			-(WORLD_WIDTH / 2.0f), (WORLD_WIDTH / 2.0f),
+			-(WORLD_HEIGHT / 2.0f), (WORLD_HEIGHT / 2.0f),
+			-1.0f, 1.0f
+		);
+
+
 		this->shader.setMat4("model", model);
+		this->shader.setMat4("projection", projection);
 
 		// render textured quad
 		this->shader.setVec3("color", color);
@@ -224,6 +244,8 @@ struct Sprite {
 	}
 };
 
+Texture loadTextureFromFile(const char* filename, bool hasAlpha);
+
 // controls
 std::map<unsigned, bool> keyDownMap;
 bool getKeyDown(GLFWwindow* window, unsigned int key);
@@ -251,27 +273,35 @@ int main() {
 		return -1;
 	}
 
+
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	glfwSetMouseButtonCallback(window, mouse_button_callback);
-
-	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-	const GLFWvidmode* monitorMode = glfwGetVideoMode(monitor);
-	refreshRate = monitorMode->refreshRate;
-	fixDt = 1.0f / (float)refreshRate;
 
 	srand(time(NULL));
 
 	// init gl
 	Shader circleShader("circle.vs", "circle.fs");
 	Shader squareShader("square.vs", "square.fs");
+	Shader textureShader("texture.vs", "texture.fs");
 	initGLData();
 
 	resetScene();
 
+	stbi_set_flip_vertically_on_load(true);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	Sprite testSprite = Sprite(textureShader);
+	Texture testTexture = loadTextureFromFile((FileSystem::getPath("resources/enemyTexture.png").c_str()), true);
+
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
 
-		updateSimulation(balls, obstacles, flippers, borderPoints, fixDt);
+		float currentTime = (float)glfwGetTime();
+		deltaTime = currentTime - lastTime;
+		lastTime = currentTime;
+
+		updateSimulation(balls, obstacles, flippers, borderPoints, deltaTime);
 
 		// render
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -280,6 +310,9 @@ int main() {
 		renderObstacles(circleShader, obstacles);
 		renderFlippers(squareShader, flippers);
 		renderBorder(squareShader, borderPoints);
+
+		// test
+		testSprite.drawSprite(testTexture, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(10.f), 0.0f, glm::vec3(1.0f));
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -762,4 +795,17 @@ bool getKeyDown(GLFWwindow* window, unsigned int key) {
 		keyDownMap[key] = true;
 		return true;
 	}
+}
+
+Texture loadTextureFromFile(const char* filename, bool hasAlpha) {
+	Texture texture;
+	if (hasAlpha) {
+		texture.internalFormat = GL_RGBA;
+		texture.imageFormat = GL_RGBA;
+	}
+	int width, height, nrChannels;
+	unsigned char* data = stbi_load(filename, &width, &height, &nrChannels, 0);
+	texture.generate(width, height, data);
+	stbi_image_free(data);
+	return texture;
 }
