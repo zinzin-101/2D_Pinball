@@ -149,7 +149,7 @@ struct Texture {
 	unsigned int wrapT;
 	unsigned int filterMin;
 	unsigned int filterMax;
-	Texture() : width(0), height(0), internalFormat(GL_RGB), imageFormat(GL_RGB), wrapS(GL_REPEAT), wrapT(GL_REPEAT), filterMin(GL_LINEAR), filterMax(GL_LINEAR) {
+	Texture() : width(0), height(0), internalFormat(GL_RGB), imageFormat(GL_RGB), wrapS(GL_REPEAT), wrapT(GL_REPEAT), filterMin(GL_NEAREST), filterMax(GL_NEAREST) {
 		glGenTextures(1, &this->id);
 	}
 
@@ -178,7 +178,8 @@ struct Sprite {
 	Shader& shader;
 	Texture texture;
 	GLuint quadVAO;
-	Sprite(Shader& shader, Texture texture): shader(shader), texture(texture) {
+	bool isFlipped;
+	Sprite(Shader& shader, Texture texture): shader(shader), texture(texture), isFlipped(false) {
 		initRenderData();
 	}
 
@@ -196,6 +197,7 @@ struct Sprite {
 		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
 		//model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 
+		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 0.0f));
 		model = glm::scale(model, glm::vec3(size));
 
 		glm::mat4 projection = glm::ortho(
@@ -258,6 +260,8 @@ struct SquareLineSprite : Sprite {
 		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
 		model = glm::translate(model, glm::vec3(0.0f, -0.5f * size.y, 0.0f));
 		model = glm::scale(model, glm::vec3(size));
+		model = glm::translate(model, glm::vec3(isFlipped ? 1.0f: 0.0f, 0.0f, 0.0f));
+		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 0.0f));
 
 
 		glm::mat4 projection = glm::ortho(
@@ -346,6 +350,12 @@ int main() {
 	borderSprite.useTiling = true;
 	borderSprite.spriteScale = BORDER_SPRITE_SCALE;
 	objectToSprite[BORDER] = &borderSprite;
+
+	Sprite pinballSprite = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/pinball.png").c_str()), true));
+	objectToSprite[BALL] = &pinballSprite;
+
+	SquareLineSprite flipperSprite = SquareLineSprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/flipper.png").c_str()), true));
+	objectToSprite[FLIPPER] = &flipperSprite;
 
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
@@ -559,7 +569,8 @@ void drawSquareLine(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, float 
 
 void renderBalls(Shader& shader, std::vector<Ball>& balls) {
 	for (const Ball& ball : balls) {
-		drawCircle(shader, glm::vec3(ball.position, 0.0f), ball.radius, glm::vec3(1.0f));
+		//drawCircle(shader, glm::vec3(ball.position, 0.0f), ball.radius, glm::vec3(1.0f));
+		objectToSprite[BALL]->drawSprite(glm::vec3(ball.position, 0.0f), glm::vec3(2.0f * ball.radius), 0.0f, glm::vec3(1.0f), true);
 	}
 
 	#ifdef DRAW_DEBUG
@@ -584,14 +595,24 @@ void renderFlippers(Shader& shader, std::vector<Flipper>& flippers) {
 	for (const Flipper& flipper : flippers) {
 		glm::vec3 startPos = glm::vec3(flipper.position, 0.0f);
 		glm::vec3 endPos = glm::vec3(flipper.getFlipperEnd(), 0.0f);
-		drawSquareLine(shader, startPos, endPos, flipper.radius, glm::vec3(1.0f, 0.0f, 0.0f));
+		//drawSquareLine(shader, startPos, endPos, flipper.radius, glm::vec3(1.0f, 0.0f, 0.0f));
+
+		if (startPos.x < endPos.x) {
+			std::swap(startPos, endPos);
+			objectToSprite[FLIPPER]->isFlipped = true;
+		}
+		else {
+			objectToSprite[FLIPPER]->isFlipped = false;
+		}
+
+		drawTexturedSquareLine(objectToSprite[FLIPPER], startPos, endPos, flipper.radius * 2.0f);
 	}
 
 	#ifdef DRAW_DEBUG
 	for (const Flipper& flipper : flippers) {
 		glm::vec3 startPos = glm::vec3(flipper.position, 0.0f);
 		glm::vec3 endPos = glm::vec3(flipper.getFlipperEnd(), 0.0f);
-		drawSquareOutline(shader, startPos, endPos, flipper.radius);
+		//drawSquareOutline(shader, startPos, endPos, flipper.radius);
 	}
 	#endif
 }
@@ -671,7 +692,7 @@ void resetScene() {
 	borderPoints.push_back(glm::vec2(25.0f, 35.0f));
 
 	Ball ball;
-	ball.radius = 1.0f;
+	ball.radius = 2.0f;
 	ball.mass = Utils::PI * ball.radius * ball.radius;
 	ball.position = glm::vec2(15.0f, 10.0f);
 	ball.velocity = glm::vec2(0.0f, 0.0f);
@@ -682,10 +703,10 @@ void resetScene() {
 	balls.push_back(ball);
 	balls.push_back(ball);
 
-	obstacles.push_back(Obstacle(glm::vec2(10.0f, 10.0f), 3.0f));
-	obstacles.push_back(Obstacle(glm::vec2(-12.0f, -8.0f), 5.0f));
-	obstacles.push_back(Obstacle(glm::vec2(4.0f, -6.0f), 6.2f));
-	obstacles.push_back(Obstacle(glm::vec2(-5.0f, 4.2f), 4.0f));
+	obstacles.push_back(Obstacle(glm::vec2(10.0f, 30.0f), 3.0f));
+	obstacles.push_back(Obstacle(glm::vec2(-12.0f, 8.0f), 5.0f));
+	obstacles.push_back(Obstacle(glm::vec2(4.0f, 4.0f), 6.2f));
+	obstacles.push_back(Obstacle(glm::vec2(-5.0f, 24.2f), 4.0f));
 
 	float radius = 1.0f;
 	float length = 12.5f;
@@ -765,7 +786,8 @@ void handleBallFlipperCollision(Ball& ball, Flipper& flipper) {
 void handleBallBorderCollision(Ball& ball, std::vector<glm::vec2>& borderPoints) {
 	if (borderPoints.size() < 3) return;
 
-	glm::vec2 d, closest, ab, normal;
+	glm::vec2 d, closest, ab;
+	glm::vec2 normal = glm::vec2();
 	float minDist = 0.0f;
 	int n = borderPoints.size();
 	for (int i = 0; i < n; i++) {
