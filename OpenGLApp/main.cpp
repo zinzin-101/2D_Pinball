@@ -755,42 +755,101 @@ void resetScene() {
 	obstacles.clear();
 
 	// init simulation
-	borderPoints.push_back(glm::vec2(-25.0f, 35.0f));
-	borderPoints.push_back(glm::vec2(-25.0f, -15.0f));
-	borderPoints.push_back(glm::vec2(-15.0f, -20.0f));
-	borderPoints.push_back(glm::vec2(-15.0f, -30.0f));
-	borderPoints.push_back(glm::vec2(15.0f, -30.0f));
-	borderPoints.push_back(glm::vec2(15.0f, -20.0f));
-	borderPoints.push_back(glm::vec2(25.0f, -15.0f));
-	borderPoints.push_back(glm::vec2(25.0f, 35.0f));
+	//borderPoints.push_back(glm::vec2(-25.0f, 35.0f));
+	//borderPoints.push_back(glm::vec2(-25.0f, -15.0f));
+	//borderPoints.push_back(glm::vec2(-15.0f, -20.0f));
+	//borderPoints.push_back(glm::vec2(-15.0f, -30.0f));
+	//borderPoints.push_back(glm::vec2(15.0f, -30.0f));
+	//borderPoints.push_back(glm::vec2(15.0f, -20.0f));
+	//borderPoints.push_back(glm::vec2(25.0f, -15.0f));
+	//borderPoints.push_back(glm::vec2(25.0f, 35.0f));
 
+	//Ball ball;
+	//ball.radius = 2.0f;
+	//ball.mass = Utils::PI * ball.radius * ball.radius;
+	//ball.position = glm::vec2(15.0f, 10.0f);
+	//ball.velocity = glm::vec2(0.0f, 0.0f);
+	//balls.push_back(ball);
+	//ball.position = glm::vec2(-15.0f, 10.0);
+	//ball.velocity = glm::vec2(0.2f, 0.0f);
+	//balls.push_back(ball);
+	//balls.push_back(ball);
+	//balls.push_back(ball);
+
+	//obstacles.push_back(Obstacle(glm::vec2(10.0f, 30.0f), 3.0f));
+	//obstacles.push_back(Obstacle(glm::vec2(-12.0f, 8.0f), 5.0f));
+	//obstacles.push_back(Obstacle(glm::vec2(4.0f, 4.0f), 6.2f));
+	//obstacles.push_back(Obstacle(glm::vec2(-5.0f, 24.2f), 4.0f));
+
+	//float radius = 1.0f;
+	//float length = 12.5f;
+	//float maxRotation = Utils::deg2Rad(45.0f);
+	//float restAngle = Utils::deg2Rad(0.0f);
+	//float angularVelocity = 10.0f;
+	//float restitution = 0.0f;
+	//glm::vec2 pos1 = glm::vec2(-15.0f, -22.0f);
+	//glm::vec2 pos2 = glm::vec2(15.0f, -22.0f);
+	//flippers.push_back(Flipper(pos1, radius, length, -restAngle, maxRotation, angularVelocity, restitution));
+	//flippers.push_back(Flipper(pos2, radius, length, Utils::PI + restAngle, maxRotation, angularVelocity, restitution, false));
+	//flippers[0].id = 0;
+	//flippers[1].id = 1;
+   // ---- TABLE SHAPE (fits your original scale) ----
+	borderPoints.push_back(glm::vec2(-25.0f, 35.0f)); // top left
+	borderPoints.push_back(glm::vec2(-25.0f, -10.0f)); // left wall
+	borderPoints.push_back(glm::vec2(-15.0f, -18.0f)); // left slope
+	borderPoints.push_back(glm::vec2(-15.0f, -30.0f)); // bottom left
+	borderPoints.push_back(glm::vec2(15.0f, -30.0f)); // bottom right
+	borderPoints.push_back(glm::vec2(15.0f, -18.0f)); // right slope
+	borderPoints.push_back(glm::vec2(25.0f, -10.0f)); // right wall
+	borderPoints.push_back(glm::vec2(25.0f, 35.0f)); // top right
+
+	// ---- BALLS (spawn safely inside) ----
 	Ball ball;
 	ball.radius = 2.0f;
 	ball.mass = Utils::PI * ball.radius * ball.radius;
-	ball.position = glm::vec2(15.0f, 10.0f);
+
+	ball.position = glm::vec2(0.0f, 20.0f);
 	ball.velocity = glm::vec2(0.0f, 0.0f);
 	balls.push_back(ball);
-	ball.position = glm::vec2(-15.0f, 10.0);
+
+	ball.position = glm::vec2(-8.0f, 15.0f);
 	ball.velocity = glm::vec2(0.2f, 0.0f);
 	balls.push_back(ball);
-	balls.push_back(ball);
+
+	ball.position = glm::vec2(8.0f, 15.0f);
+	ball.velocity = glm::vec2(-0.2f, 0.0f);
 	balls.push_back(ball);
 
-	obstacles.push_back(Obstacle(glm::vec2(10.0f, 30.0f), 3.0f));
-	obstacles.push_back(Obstacle(glm::vec2(-12.0f, 8.0f), 5.0f));
-	obstacles.push_back(Obstacle(glm::vec2(4.0f, 4.0f), 6.2f));
-	obstacles.push_back(Obstacle(glm::vec2(-5.0f, 24.2f), 4.0f));
+	// ---- OBSTACLES (all inside borders) ----
 
+	// Top bumpers
+	obstacles.push_back(Obstacle(glm::vec2(0.0f, 28.0f), 4.0f));
+	obstacles.push_back(Obstacle(glm::vec2(-10.0f, 24.0f), 3.0f));
+	obstacles.push_back(Obstacle(glm::vec2(10.0f, 24.0f), 3.0f));
+
+	// Midfield chaos
+	obstacles.push_back(Obstacle(glm::vec2(-12.0f, 10.0f), 2.5f));
+	obstacles.push_back(Obstacle(glm::vec2(0.0f, 8.0f), 4.5f));
+	obstacles.push_back(Obstacle(glm::vec2(12.0f, 10.0f), 2.5f));
+
+	// Side nudgers (guide balls toward flippers, not block drain)
+	obstacles.push_back(Obstacle(glm::vec2(-12.0f, -4.0f), 2.0f));
+	obstacles.push_back(Obstacle(glm::vec2(12.0f, -4.0f), 2.0f));
+
+	// ---- FLIPPERS (attached to lower slopes) ----
 	float radius = 1.0f;
-	float length = 12.5f;
+	float length = 12.0f;
 	float maxRotation = Utils::deg2Rad(45.0f);
-	float restAngle = Utils::deg2Rad(0.0f);
+	float restAngle = Utils::deg2Rad(10.0f);
 	float angularVelocity = 10.0f;
 	float restitution = 0.0f;
-	glm::vec2 pos1 = glm::vec2(-15.0f, -22.0f);
-	glm::vec2 pos2 = glm::vec2(15.0f, -22.0f);
+
+	glm::vec2 pos1 = glm::vec2(-15.0f, -18.0f);
+	glm::vec2 pos2 = glm::vec2(15.0f, -18.0f);
+
 	flippers.push_back(Flipper(pos1, radius, length, -restAngle, maxRotation, angularVelocity, restitution));
 	flippers.push_back(Flipper(pos2, radius, length, Utils::PI + restAngle, maxRotation, angularVelocity, restitution, false));
+
 	flippers[0].id = 0;
 	flippers[1].id = 1;
 }
