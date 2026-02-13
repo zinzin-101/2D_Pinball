@@ -369,7 +369,7 @@ int main() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	window = glfwCreateWindow(WIDTH, HEIGHT, "2D_Billiard", NULL, NULL);
+	window = glfwCreateWindow(WIDTH, HEIGHT, "2D_Pinball", NULL, NULL);
 
 	if (window == NULL) {
 		std::cout << "Failed to create GLFW window" << std::endl;
@@ -442,8 +442,8 @@ int main() {
 		renderFlippers(squareShader, flippers);
 		renderBorder(squareShader, borderPoints);
 
-		fireSprite.drawSprite(glm::vec3(0.0f), glm::vec3(10.0f), 0.0f, glm::vec3(1.0f));
-		fireSprite.update(deltaTime);
+		//fireSprite.drawSprite(glm::vec3(0.0f), glm::vec3(10.0f), 0.0f, glm::vec3(1.0f));
+		//fireSprite.update(deltaTime);
 
 		// test
 		//testSprite.drawSprite(testTexture, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(10.f), 0.0f, glm::vec3(1.0f));
