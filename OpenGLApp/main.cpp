@@ -135,7 +135,7 @@ void renderFlippers(Shader& shader, std::vector<Flipper>& flippers);
 void renderBorder(Shader& shader, std::vector<glm::vec2>& borderPoints);
 
 // debugging
-#define DRAW_DEBUG
+//#define DRAW_DEBUG
 void drawSquareOutline(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, float radius);
 void drawCircleOutline(Shader& shader, glm::vec3 position, float radius);
 
@@ -179,7 +179,8 @@ struct Sprite {
 	Texture texture;
 	GLuint quadVAO;
 	bool isFlipped;
-	Sprite(Shader& shader, Texture texture): shader(shader), texture(texture), isFlipped(false) {
+	glm::vec3 offset;
+	Sprite(Shader& shader, Texture texture): shader(shader), texture(texture), isFlipped(false), offset(0.0f) {
 		initRenderData();
 	}
 
@@ -191,6 +192,7 @@ struct Sprite {
 		shader.use();
 		glm::mat4 model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(position));
+		model = glm::translate(model, glm::vec3(offset));
 
 		model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 		float angle = isRadian ? rotation : glm::radians(rotation);
@@ -256,6 +258,7 @@ struct SquareLineSprite : Sprite {
 		glm::mat4 model = glm::mat4(1.0f);
 
 		model = glm::translate(model, glm::vec3(position));
+		model = glm::translate(model, glm::vec3(offset));
 		float angle = isRadian ? rotation : glm::radians(rotation);
 		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
 		model = glm::translate(model, glm::vec3(0.0f, -0.5f * size.y, 0.0f));
@@ -356,6 +359,9 @@ int main() {
 
 	SquareLineSprite flipperSprite = SquareLineSprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/flipper.png").c_str()), true));
 	objectToSprite[FLIPPER] = &flipperSprite;
+
+	Sprite obstacleSprite = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/sand.png").c_str()), true));
+	objectToSprite[OBSTACLE] = &obstacleSprite;
 
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
@@ -582,7 +588,8 @@ void renderBalls(Shader& shader, std::vector<Ball>& balls) {
 
 void renderObstacles(Shader& shader, std::vector<Obstacle>& obstacles) {
 	for (const Obstacle& obstacle : obstacles) {
-		drawCircle(shader, glm::vec3(obstacle.position, 0.0f), obstacle.radius, glm::vec3(1.0f, 1.0f, 0.0f));
+		//drawCircle(shader, glm::vec3(obstacle.position, 0.0f), obstacle.radius, glm::vec3(1.0f, 1.0f, 0.0f));
+		objectToSprite[OBSTACLE]->drawSprite(glm::vec3(obstacle.position, 0.0f), glm::vec3(2.0f * obstacle.radius), 0.0f, glm::vec3(1.0f));
 	}
 
 	#ifdef DRAW_DEBUG
@@ -605,6 +612,7 @@ void renderFlippers(Shader& shader, std::vector<Flipper>& flippers) {
 			objectToSprite[FLIPPER]->isFlipped = false;
 		}
 
+		objectToSprite[FLIPPER]->offset = glm::vec3(0.0f, -0.5f, 0.0f);
 		drawTexturedSquareLine(objectToSprite[FLIPPER], startPos, endPos, flipper.radius * 2.0f);
 	}
 
@@ -612,7 +620,7 @@ void renderFlippers(Shader& shader, std::vector<Flipper>& flippers) {
 	for (const Flipper& flipper : flippers) {
 		glm::vec3 startPos = glm::vec3(flipper.position, 0.0f);
 		glm::vec3 endPos = glm::vec3(flipper.getFlipperEnd(), 0.0f);
-		//drawSquareOutline(shader, startPos, endPos, flipper.radius);
+		drawSquareOutline(shader, startPos, endPos, flipper.radius);
 	}
 	#endif
 }
