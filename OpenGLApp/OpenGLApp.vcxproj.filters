@@ -29,6 +29,8 @@
     <None Include="square.fs" />
     <None Include="texture.vs" />
     <None Include="texture.fs" />
+    <None Include="animation.vs" />
+    <None Include="animation.fs" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Utils.h">

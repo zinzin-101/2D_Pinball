@@ -137,6 +137,8 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="animation.fs" />
+    <None Include="animation.vs" />
     <None Include="square.fs" />
     <None Include="square.vs" />
     <None Include="circle.fs" />
