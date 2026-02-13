@@ -289,6 +289,63 @@ struct SquareLineSprite : Sprite {
 	}
 };
 
+struct AnimatedSprite : Sprite {
+	unsigned int frameCount;
+	unsigned int currentFrame;
+	float timePerFrame;
+	float timer;
+	glm::vec2 animationOffset;
+	AnimatedSprite(Shader& shader, Texture texture) : Sprite(shader, texture), frameCount(0), currentFrame(0), timePerFrame(0.0f), timer(0.0f), animationOffset(0.0f) {}
+
+	virtual void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color, bool isRadian = false) {
+		shader.use();
+		glm::mat4 model = glm::mat4(1.0f);
+		model = glm::translate(model, glm::vec3(position));
+		model = glm::translate(model, glm::vec3(offset));
+
+		model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
+		float angle = isRadian ? rotation : glm::radians(rotation);
+		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
+		//model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
+
+		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 0.0f));
+		model = glm::scale(model, glm::vec3(size));
+
+		glm::mat4 projection = glm::ortho(
+			-(WORLD_WIDTH / 2.0f), (WORLD_WIDTH / 2.0f),
+			-(WORLD_HEIGHT / 2.0f), (WORLD_HEIGHT / 2.0f),
+			-1.0f, 1.0f
+		);
+
+		shader.setMat4("model", model);
+		shader.setMat4("projection", projection);
+		shader.setVec3("color", color);
+
+		shader.setVec2("offset", animationOffset);
+		shader.setVec2("frameScale", glm::vec2(1.0f / (float)frameCount, 1.0f));
+
+		glActiveTexture(GL_TEXTURE0);
+		texture.bind();
+
+		glBindVertexArray(this->quadVAO);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		glBindVertexArray(0);
+	}
+
+	void setFrame(unsigned int frameIndex) {
+		animationOffset.x = (1.0f / (float)frameCount) * (float)frameIndex;
+	}
+
+	void update(float dt) {
+		timer += dt;
+		if (timer > timePerFrame) {
+			timer = 0.0f;
+			currentFrame = ++currentFrame % frameCount;
+			setFrame(currentFrame);
+		}
+	}
+};
+
 Texture loadTextureFromFile(const char* filename, bool hasAlpha);
 void drawTexturedSquareLine(Sprite* sprite, glm::vec3 startPos, glm::vec3 endPos, float radius);
 
@@ -338,6 +395,7 @@ int main() {
 	Shader circleShader("circle.vs", "circle.fs");
 	Shader squareShader("square.vs", "square.fs");
 	Shader textureShader("texture.vs", "texture.fs");
+	Shader animationShader("animation.vs", "animation.fs");
 	initGLData();
 
 	resetScene();
@@ -363,6 +421,10 @@ int main() {
 	Sprite obstacleSprite = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/sand.png").c_str()), true));
 	objectToSprite[OBSTACLE] = &obstacleSprite;
 
+	AnimatedSprite fireSprite = AnimatedSprite(animationShader, loadTextureFromFile((FileSystem::getPath("resources/fire.png").c_str()), true));
+	fireSprite.frameCount = 4;
+	fireSprite.timePerFrame = 0.05f;
+
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
 
@@ -379,6 +441,9 @@ int main() {
 		renderObstacles(circleShader, obstacles);
 		renderFlippers(squareShader, flippers);
 		renderBorder(squareShader, borderPoints);
+
+		fireSprite.drawSprite(glm::vec3(0.0f), glm::vec3(10.0f), 0.0f, glm::vec3(1.0f));
+		fireSprite.update(deltaTime);
 
 		// test
 		//testSprite.drawSprite(testTexture, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(10.f), 0.0f, glm::vec3(1.0f));
