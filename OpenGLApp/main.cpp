@@ -46,8 +46,8 @@ void initSquareData();
 void initGLData();
 
 // simulation
-const float WORLD_WIDTH = 151.1f;
-const float WORLD_HEIGHT = 85.0f;
+const float WORLD_WIDTH = 226.65f;
+const float WORLD_HEIGHT = 127.5f;
 const float FIX_DT = 1.0f / 60.0f;
 float deltaTime = 0.0f;
 float lastTime  = 0.0f;
@@ -112,6 +112,11 @@ struct Flipper {
 		glm::vec2 dir = glm::vec2(glm::cos(angle), glm::sin(angle));
 		return position + dir * length;
 	}
+};
+
+enum FlipperMouseControlId {
+	LEFT = 0,
+	RIGHT
 };
 
 std::vector<glm::vec2> borderPoints;
@@ -352,13 +357,14 @@ struct AnimatedSprite {
 Texture loadTextureFromFile(const char* filename, bool hasAlpha);
 void drawTexturedSquareLine(Sprite* sprite, glm::vec3 startPos, glm::vec3 endPos, float radius);
 
-// game data
+// game
 enum GameState {
 	RUNNING,
 	GAME_OVER
 };
 
 struct Enemy : Circle {
+	float speedAbsorption;
 	AnimatedSprite flyingSprite;
 	AnimatedSprite dyingSprite;
 	bool isDead;
@@ -367,14 +373,16 @@ struct Enemy : Circle {
 	AnimatedSprite* currentSprite;
 	bool canRemove;
 
-	Enemy(glm::vec2 position, float radius, AnimatedSprite& flyingSprite, AnimatedSprite& dyingSprite, bool isFacingRight, glm::vec2 velocity) :
+	Enemy(glm::vec2 position, float radius, float pushAmount, AnimatedSprite& flyingSprite, AnimatedSprite& dyingSprite, bool isFacingRight, glm::vec2 velocity) :
 		Circle(position, radius),
+		speedAbsorption(pushAmount),
 		flyingSprite(flyingSprite), dyingSprite(dyingSprite),
 		isDead(false), isFacingRight(isFacingRight), velocity(velocity), currentSprite(nullptr), canRemove(false) {
 		currentSprite = &this->flyingSprite;
 	}
 
 	Enemy(const Enemy& other): Circle(other.position, other.radius) {
+		this->speedAbsorption = other.speedAbsorption;
 		this->flyingSprite = other.flyingSprite;
 		this->dyingSprite = other.dyingSprite;
 		this->isDead = other.isDead;
@@ -404,13 +412,15 @@ struct Enemy : Circle {
 };
 
 bool checkCircleCollision(Circle& c1, Circle& c2);
+void handleEnemyBorderCollision(Enemy& enemy, std::vector<glm::vec2>& borderPoints);
 void updateGame(float dt);
 void renderEnemy(Enemy& enemy, Shader* debugShader);
 void renderEnemies(Shader* debugShader);
 
 std::vector<Enemy> enemies;
 GameState gameState = RUNNING;
-
+float lowestFlipperY = FLT_MAX;
+float ballDespawnHeight = FLT_MAX;
 
 enum ObjectType {
 	BALL,
@@ -514,14 +524,16 @@ int main() {
 		updateSimulation(deltaTime);
 		updateGame(deltaTime);
 
+		//std::cout << gameState << std::endl;
+
 		// render
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
+		renderEnemies(&circleShader);
 		renderBalls(circleShader);
 		renderObstacles(circleShader);
 		renderFlippers(squareShader);
 		renderBorder(squareShader);
-		renderEnemies(&circleShader);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -537,11 +549,35 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
 	if (flippers.empty()) return;
 
-	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) flippers[0].isFlipped = true;
-	else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) flippers[0].isFlipped = false;
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+		for (Flipper& flipper : flippers) {
+			if (flipper.id == LEFT) {
+				flipper.isFlipped = true;
+			}
+		}
+	}
+	else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
+		for (Flipper& flipper : flippers) {
+			if (flipper.id == LEFT) {
+				flipper.isFlipped = false;
+			}
+		}
+	}
 
-	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) flippers[1].isFlipped = true;
-	else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE) flippers[1].isFlipped = false;
+	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
+		for (Flipper& flipper : flippers) {
+			if (flipper.id == RIGHT) {
+				flipper.isFlipped = true;
+			}
+		}
+	}
+	else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE) {
+		for (Flipper& flipper : flippers) {
+			if (flipper.id == RIGHT) {
+				flipper.isFlipped = false;
+			}
+		}
+	}
 }
 
 void processInput(GLFWwindow* window) {
@@ -829,114 +865,161 @@ void resetScene() {
 	obstacles.clear();
 	enemies.clear();
 
-	// init simulation
-	//borderPoints.push_back(glm::vec2(-25.0f, 35.0f));
-	//borderPoints.push_back(glm::vec2(-25.0f, -15.0f));
-	//borderPoints.push_back(glm::vec2(-15.0f, -20.0f));
-	//borderPoints.push_back(glm::vec2(-15.0f, -30.0f));
-	//borderPoints.push_back(glm::vec2(15.0f, -30.0f));
-	//borderPoints.push_back(glm::vec2(15.0f, -20.0f));
-	//borderPoints.push_back(glm::vec2(25.0f, -15.0f));
-	//borderPoints.push_back(glm::vec2(25.0f, 35.0f));
+	gameState = RUNNING;
 
+	//borderPoints.push_back(glm::vec2(-25.0f, 35.0f)); // top left
+	//borderPoints.push_back(glm::vec2(-25.0f, -10.0f)); // left wall
+	//borderPoints.push_back(glm::vec2(-15.0f, -18.0f)); // left slope
+	//borderPoints.push_back(glm::vec2(-15.0f, -30.0f)); // bottom left
+	//borderPoints.push_back(glm::vec2(15.0f, -30.0f)); // bottom right
+	//borderPoints.push_back(glm::vec2(15.0f, -18.0f)); // right slope
+	//borderPoints.push_back(glm::vec2(25.0f, -10.0f)); // right wall
+	//borderPoints.push_back(glm::vec2(25.0f, 35.0f)); // top right
+
+	//// ---- BALLS (spawn safely inside) ----
 	//Ball ball;
 	//ball.radius = 2.0f;
 	//ball.mass = Utils::PI * ball.radius * ball.radius;
-	//ball.position = glm::vec2(15.0f, 10.0f);
+
+	//ball.position = glm::vec2(0.0f, 20.0f);
 	//ball.velocity = glm::vec2(0.0f, 0.0f);
-	//balls.push_back(ball);
-	//ball.position = glm::vec2(-15.0f, 10.0);
+	////balls.push_back(ball);
+
+	//ball.position = glm::vec2(-8.0f, 15.0f);
 	//ball.velocity = glm::vec2(0.2f, 0.0f);
 	//balls.push_back(ball);
+
+	//ball.position = glm::vec2(8.0f, 15.0f);
+	//ball.velocity = glm::vec2(-0.2f, 0.0f);
 	//balls.push_back(ball);
-	//balls.push_back(ball);
 
-	//obstacles.push_back(Obstacle(glm::vec2(10.0f, 30.0f), 3.0f));
-	//obstacles.push_back(Obstacle(glm::vec2(-12.0f, 8.0f), 5.0f));
-	//obstacles.push_back(Obstacle(glm::vec2(4.0f, 4.0f), 6.2f));
-	//obstacles.push_back(Obstacle(glm::vec2(-5.0f, 24.2f), 4.0f));
+	//// ---- OBSTACLES (all inside borders) ----
 
-	//float radius = 1.0f;
-	//float length = 12.5f;
-	//float maxRotation = Utils::deg2Rad(45.0f);
-	//float restAngle = Utils::deg2Rad(0.0f);
-	//float angularVelocity = 10.0f;
-	//float restitution = 0.0f;
-	//glm::vec2 pos1 = glm::vec2(-15.0f, -22.0f);
-	//glm::vec2 pos2 = glm::vec2(15.0f, -22.0f);
-	//flippers.push_back(Flipper(pos1, radius, length, -restAngle, maxRotation, angularVelocity, restitution));
-	//flippers.push_back(Flipper(pos2, radius, length, Utils::PI + restAngle, maxRotation, angularVelocity, restitution, false));
-	//flippers[0].id = 0;
-	//flippers[1].id = 1;
-   // ---- TABLE SHAPE (fits your original scale) ----
-	borderPoints.push_back(glm::vec2(-25.0f, 35.0f)); // top left
-	borderPoints.push_back(glm::vec2(-25.0f, -10.0f)); // left wall
-	borderPoints.push_back(glm::vec2(-15.0f, -18.0f)); // left slope
-	borderPoints.push_back(glm::vec2(-15.0f, -30.0f)); // bottom left
-	borderPoints.push_back(glm::vec2(15.0f, -30.0f)); // bottom right
-	borderPoints.push_back(glm::vec2(15.0f, -18.0f)); // right slope
-	borderPoints.push_back(glm::vec2(25.0f, -10.0f)); // right wall
-	borderPoints.push_back(glm::vec2(25.0f, 35.0f)); // top right
-
-	// ---- BALLS (spawn safely inside) ----
-	Ball ball;
-	ball.radius = 2.0f;
-	ball.mass = Utils::PI * ball.radius * ball.radius;
-
-	ball.position = glm::vec2(0.0f, 20.0f);
-	ball.velocity = glm::vec2(0.0f, 0.0f);
-	balls.push_back(ball);
-
-	ball.position = glm::vec2(-8.0f, 15.0f);
-	ball.velocity = glm::vec2(0.2f, 0.0f);
-	balls.push_back(ball);
-
-	ball.position = glm::vec2(8.0f, 15.0f);
-	ball.velocity = glm::vec2(-0.2f, 0.0f);
-	balls.push_back(ball);
-
-	// ---- OBSTACLES (all inside borders) ----
-
-	//// Top bumpers
 	//obstacles.push_back(Obstacle(glm::vec2(0.0f, 28.0f), 4.0f));
 	//obstacles.push_back(Obstacle(glm::vec2(-10.0f, 24.0f), 3.0f));
 	//obstacles.push_back(Obstacle(glm::vec2(10.0f, 24.0f), 3.0f));
 
-	//// Midfield chaos
-	//obstacles.push_back(Obstacle(glm::vec2(-12.0f, 10.0f), 2.5f));
-	//obstacles.push_back(Obstacle(glm::vec2(0.0f, 8.0f), 4.5f));
-	//obstacles.push_back(Obstacle(glm::vec2(12.0f, 10.0f), 2.5f));
 
-	//// Side nudgers (guide balls toward flippers, not block drain)
-	//obstacles.push_back(Obstacle(glm::vec2(-12.0f, -4.0f), 2.0f));
-	//obstacles.push_back(Obstacle(glm::vec2(12.0f, -4.0f), 2.0f));
+	//// ---- FLIPPERS (attached to lower slopes) ----
+	//float radius = 1.0f;
+	//float length = 12.0f;
+	//float maxRotation = Utils::deg2Rad(45.0f);
+	//float restAngle = Utils::deg2Rad(10.0f);
+	//float angularVelocity = 10.0f;
+	//float restitution = 0.0f;
 
-	// ---- FLIPPERS (attached to lower slopes) ----
-	float radius = 1.0f;
-	float length = 12.0f;
-	float maxRotation = Utils::deg2Rad(45.0f);
+	//glm::vec2 pos1 = glm::vec2(-15.0f, -18.0f);
+	//glm::vec2 pos2 = glm::vec2(15.0f, -18.0f);
+
+	//flippers.push_back(Flipper(pos1, radius, length, -restAngle, maxRotation, angularVelocity, restitution));
+	//flippers.push_back(Flipper(pos2, radius, length, Utils::PI + restAngle, maxRotation, angularVelocity, restitution, false));
+
+	//flippers[0].id = LEFT;
+	//flippers[1].id = RIGHT;
+
+	// ---- Top Left
+	borderPoints.push_back(glm::vec2(-75.0f, 75.0f));
+
+	// ---- Left Wall
+	borderPoints.push_back(glm::vec2(-75.0f, -5.0f));
+
+	// ---- Long Inward Curve
+	borderPoints.push_back(glm::vec2(-60.0f, -20.0f));
+	borderPoints.push_back(glm::vec2(-45.0f, -32.0f));
+	borderPoints.push_back(glm::vec2(-32.0f, -40.0f));
+
+	// ---- Short Slope Into Drain
+	borderPoints.push_back(glm::vec2(-20.0f, -50.0f));
+
+	// ---- Vertical Drain Shaft (left)
+	borderPoints.push_back(glm::vec2(-20.0f, -200.0f));
+
+	// ---- Bottom of Drain
+	borderPoints.push_back(glm::vec2(20.0f, -200.0f));
+
+	// ---- Vertical Drain Shaft (right)
+	borderPoints.push_back(glm::vec2(20.0f, -50.0f));
+
+	// ---- Short Slope Out of Drain (mirror of -15,-50)
+	borderPoints.push_back(glm::vec2(32.0f, -40.0f));  // mirror of -32,-40
+
+	// ---- Long Outward Curve (mirrors)
+	borderPoints.push_back(glm::vec2(45.0f, -32.0f));
+	borderPoints.push_back(glm::vec2(60.0f, -20.0f));
+
+	// ---- Right Wall
+	borderPoints.push_back(glm::vec2(75.0f, -5.0f));
+
+	// ---- Top Right
+	borderPoints.push_back(glm::vec2(75.0f, 75.0f));
+
+	Ball ball;
+	ball.radius = 2.0f;
+	ball.mass = Utils::PI * ball.radius * ball.radius;
+
+	// Left ball
+	ball.position = glm::vec2(-10.0f, 40.0f);
+	ball.velocity = glm::vec2(0.3f, 0.0f);
+	balls.push_back(ball);
+
+	// Right ball
+	ball.position = glm::vec2(10.0f, 40.0f);
+	ball.velocity = glm::vec2(-0.3f, 0.0f);
+	balls.push_back(ball);
+
+	// Top center
+	obstacles.push_back(Obstacle(glm::vec2(0.0f, 35.0f), 5.0f));
+
+	// Upper left
+	obstacles.push_back(Obstacle(glm::vec2(-18.0f, 28.0f), 4.0f));
+
+	// Upper right
+	obstacles.push_back(Obstacle(glm::vec2(18.0f, 28.0f), 4.0f));
+
+	// Middle
+	obstacles.push_back(Obstacle(glm::vec2(0.0f, 10.0f), 4.0f));
+
+	float radius = 1.5f;
+	float length = 16.0f;
+	float maxRotation = Utils::deg2Rad(50.0f);
 	float restAngle = Utils::deg2Rad(10.0f);
-	float angularVelocity = 10.0f;
-	float restitution = 0.0f;
+	float angularVelocity = 8.0f;
+	float restitution = 0.2f;
 
-	glm::vec2 pos1 = glm::vec2(-15.0f, -18.0f);
-	glm::vec2 pos2 = glm::vec2(15.0f, -18.0f);
+	glm::vec2 leftPivot = glm::vec2(-20.0f, -50.0f);
+	glm::vec2 rightPivot = glm::vec2(20.0f, -50.0f);
 
-	flippers.push_back(Flipper(pos1, radius, length, -restAngle, maxRotation, angularVelocity, restitution));
-	flippers.push_back(Flipper(pos2, radius, length, Utils::PI + restAngle, maxRotation, angularVelocity, restitution, false));
+	flippers.push_back(Flipper(leftPivot, radius, length, -restAngle, maxRotation, angularVelocity, restitution));
+	flippers.push_back(Flipper(rightPivot,radius, length, Utils::PI + restAngle, maxRotation, angularVelocity, restitution, false));
 
-	flippers[0].id = 0;
-	flippers[1].id = 1;
+	flippers[0].id = LEFT;
+	flippers[1].id = RIGHT;
 
 	// enemies
 	AnimatedSprite& enemyFlying = *objectToAnimatedSprite[FLYING_ENEMY];
 	AnimatedSprite& enemyDying = *objectToAnimatedSprite[DYING_ENEMY];
-	Enemy testEnemy1(glm::vec2(-20.0f, 0.0f), 5.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
-	Enemy testEnemy2(glm::vec2(0.0f, 0.0f), 5.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
-	Enemy testEnemy3(glm::vec2(20.0f, 0.0f), 5.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
+	Enemy testEnemy1(glm::vec2(-20.0f, 0.0f), 5.0f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	Enemy testEnemy2(glm::vec2(0.0f, 0.0f), 5.0f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	Enemy testEnemy3(glm::vec2(20.0f, 0.0f), 5.0f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
 	enemies.push_back(testEnemy1);
 	enemies.push_back(testEnemy2);
 	enemies.push_back(testEnemy3);
+
+	lowestFlipperY = FLT_MAX;
+	for (Flipper& flipper : flippers) {
+		lowestFlipperY = glm::min(flipper.position.y, lowestFlipperY);
+	}
+
+	ballDespawnHeight = FLT_MAX;
+	float lowestPoint = FLT_MAX;
+	float secondLowestPoint = FLT_MAX;
+	for (glm::vec2& point : borderPoints) {
+		if (point.y < lowestPoint) {
+			secondLowestPoint = lowestPoint;
+			lowestPoint = point.y;
+		}
+	}
+	ballDespawnHeight = (lowestPoint + secondLowestPoint) / 2.0f;
 }
 
 void handleBallCollision(Ball& b1, Ball& b2, float restitution) {
@@ -1118,31 +1201,87 @@ bool checkCircleCollision(Circle& c1, Circle& c2) {
 	return distance < (c1.radius + c2.radius);
 }
 
+void handleEnemyBorderCollision(Enemy& enemy, std::vector<glm::vec2>& borderPoints) {
+	if (borderPoints.size() < 3) return;
+
+	glm::vec2 d, closest, ab;
+	glm::vec2 normal = glm::vec2();
+	float minDist = 0.0f;
+	int n = borderPoints.size();
+	for (int i = 0; i < n; i++) {
+		glm::vec2 a = borderPoints[i];
+		glm::vec2 b = borderPoints[(i + 1) % n];
+		glm::vec2 c = Utils::getClosestPointOnSegment(enemy.position, a, b);
+		d = enemy.position - c;
+		float distance = glm::length(d);
+		if (i == 0 || distance < minDist) {
+			minDist = distance;
+			closest = c;
+			ab = b - a;
+			normal = Utils::getPerpendicular(ab);
+		}
+	}
+
+	d = enemy.position - closest;
+	float distance = glm::length(d);
+	if (distance == 0.0f) {
+		d = normal;
+		distance = glm::length(normal);
+	}
+	d = glm::normalize(d);
+
+	if (glm::dot(d, normal) >= 0.0f) {
+		if (distance > enemy.radius + BORDER_SIZE * 0.5f) return;
+
+		enemy.position += d * (enemy.radius - distance + BORDER_SIZE * 0.5f);
+	}
+	else {
+		enemy.position += d * -(distance + enemy.radius - BORDER_SIZE * 0.5f);
+	}
+
+	enemy.velocity.x = -enemy.velocity.x;
+}
+
 void updateGame(float dt) {
+	if (gameState == GAME_OVER) return;
+
 	for (Enemy& enemy : enemies) {
 		enemy.update(dt);
 
-		float lowestY = FLT_MAX;
-		for (Flipper& flipper : flippers) {
-			lowestY = glm::min(flipper.position.y, lowestY);
-		}
+		if (enemy.isDead) continue;
 
-		if (enemy.position.y + enemy.radius < lowestY) {
+		if (enemy.position.y + enemy.radius < lowestFlipperY) {
 			gameState = GAME_OVER;
 			break;
 		}
 
 		for (Ball& ball : balls) {
 			if (checkCircleCollision(enemy, ball)) {
+				glm::vec2 enemyToBall = ball.position - enemy.position;
+				enemyToBall = glm::normalize(enemyToBall);
+				ball.velocity = enemyToBall * (enemy.speedAbsorption * glm::length(ball.velocity));
 				enemy.setToDead();
 				break;
 			}
 		}
+
+		handleEnemyBorderCollision(enemy, borderPoints);
 	}
 
-	for (int i = enemies.size() - 1; i >= 0; i--) {
-		if (enemies.at(i).canRemove) {
-			enemies.erase(enemies.begin() + i);
+	for (std::vector<Ball>::iterator itr = balls.end() - 1; itr != balls.begin() - 1; --itr) {
+		Ball& ball = *itr;
+		if (ball.position.y < ballDespawnHeight) {
+			balls.erase(itr);
+		}
+	}
+	if (balls.empty()) {
+		gameState = GAME_OVER;
+	}
+
+	for (std::vector<Enemy>::iterator itr = enemies.end() - 1; itr != enemies.begin() - 1; --itr) {
+		Enemy& enemy = *itr;
+		if (enemy.canRemove) {
+			enemies.erase(itr);
 		}
 	}
 }
