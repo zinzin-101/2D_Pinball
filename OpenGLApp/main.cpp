@@ -15,8 +15,8 @@
 #include <map>
 #include <vector>
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
+void frameBufferSizeCallback(GLFWwindow* window, int width, int height);
+void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void processInput(GLFWwindow* window);
 
 // settings
@@ -424,10 +424,22 @@ std::vector<Enemy> enemies;
 GameState gameState = RUNNING;
 float lowestFlipperY = FLT_MAX;
 float ballDespawnHeight = FLT_MAX;
-const int COMBO_TO_SPAWN_BALL = 3;
-glm::vec2 ballSpawnPosLeft, ballSpawnPosRight;
-int comboCounter = 0;
+glm::vec2 spawnPosLeft, spawnPosRight;
 int numOfBallsToSpawn = 0;
+const float INITIAL_ENEMY_SPAWN_INTERVAL = 2.0f;
+const float INITIAL_ENEMY_DESCEND_SPEED = 1.0f;
+const float INITIAL_ENEMY_MAX_HORIZONTAL_SPEED = 1.0f;
+const int INITTIAL_BALL_COUNT = 1;
+const int COMBO_TO_SPAWN_BALL = 2;
+const float MINIMUM_ENEMY_SPAWN_INTERVAL = 0.5f;
+const float ENEMY_SPAWN_INTERVAL_DECREASE_RATE_MULTIPLIER = 0.95f;
+const float ENEMY_SPEED_INCREASE_RATE_MULTIPLIER = 1.05f;
+const float COMBO_WINDOW = 1.0f;
+int comboCounter = 0;
+float comboTimer = 0.0f;
+float enemySpawnInterval = INITIAL_ENEMY_SPAWN_INTERVAL;
+float enemyDescendSpeed = INITIAL_ENEMY_DESCEND_SPEED;
+float enemyMaxHorizontalSpeed = INITIAL_ENEMY_MAX_HORIZONTAL_SPEED;
 
 enum ObjectType {
 	BALL,
@@ -473,8 +485,8 @@ int main() {
 	}
 
 
-	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-	glfwSetMouseButtonCallback(window, mouse_button_callback);
+	glfwSetFramebufferSizeCallback(window, frameBufferSizeCallback);
+	glfwSetMouseButtonCallback(window, mouseButtonCallback);
 
 	srand(time(NULL));
 
@@ -549,12 +561,12 @@ int main() {
 	return 0; 
 }
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+void frameBufferSizeCallback(GLFWwindow* window, int width, int height) {
 
 }
 
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-	if (flippers.empty()) return;
+void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+	if (flippers.empty() || gameState == GAME_OVER) return;
 
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
 		for (Flipper& flipper : flippers) {
@@ -880,140 +892,62 @@ void resetScene() {
 	comboCounter = 0;
 	numOfBallsToSpawn = 0;
 
-	//borderPoints.push_back(glm::vec2(-25.0f, 35.0f)); // top left
-	//borderPoints.push_back(glm::vec2(-25.0f, -10.0f)); // left wall
-	//borderPoints.push_back(glm::vec2(-15.0f, -18.0f)); // left slope
-	//borderPoints.push_back(glm::vec2(-15.0f, -30.0f)); // bottom left
-	//borderPoints.push_back(glm::vec2(15.0f, -30.0f)); // bottom right
-	//borderPoints.push_back(glm::vec2(15.0f, -18.0f)); // right slope
-	//borderPoints.push_back(glm::vec2(25.0f, -10.0f)); // right wall
-	//borderPoints.push_back(glm::vec2(25.0f, 35.0f)); // top right
+	float enemySpawnInterval = INITIAL_ENEMY_SPAWN_INTERVAL;
+	float enemyDescendSpeed = INITIAL_ENEMY_DESCEND_SPEED;
+	float enemyMaxHorizontalSpeed = INITIAL_ENEMY_MAX_HORIZONTAL_SPEED;
 
-	//// ---- BALLS (spawn safely inside) ----
-	//Ball ball;
-	//ball.radius = 2.0f;
-	//ball.mass = Utils::PI * ball.radius * ball.radius;
-
-	//ball.position = glm::vec2(0.0f, 20.0f);
-	//ball.velocity = glm::vec2(0.0f, 0.0f);
-	////balls.push_back(ball);
-
-	//ball.position = glm::vec2(-8.0f, 15.0f);
-	//ball.velocity = glm::vec2(0.2f, 0.0f);
-	//balls.push_back(ball);
-
-	//ball.position = glm::vec2(8.0f, 15.0f);
-	//ball.velocity = glm::vec2(-0.2f, 0.0f);
-	//balls.push_back(ball);
-
-	//// ---- OBSTACLES (all inside borders) ----
-
-	//obstacles.push_back(Obstacle(glm::vec2(0.0f, 28.0f), 4.0f));
-	//obstacles.push_back(Obstacle(glm::vec2(-10.0f, 24.0f), 3.0f));
-	//obstacles.push_back(Obstacle(glm::vec2(10.0f, 24.0f), 3.0f));
-
-
-	//// ---- FLIPPERS (attached to lower slopes) ----
-	//float radius = 1.0f;
-	//float length = 12.0f;
-	//float maxRotation = Utils::deg2Rad(45.0f);
-	//float restAngle = Utils::deg2Rad(10.0f);
-	//float angularVelocity = 10.0f;
-	//float restitution = 0.0f;
-
-	//glm::vec2 pos1 = glm::vec2(-15.0f, -18.0f);
-	//glm::vec2 pos2 = glm::vec2(15.0f, -18.0f);
-
-	//flippers.push_back(Flipper(pos1, radius, length, -restAngle, maxRotation, angularVelocity, restitution));
-	//flippers.push_back(Flipper(pos2, radius, length, Utils::PI + restAngle, maxRotation, angularVelocity, restitution, false));
-
-	//flippers[0].id = LEFT;
-	//flippers[1].id = RIGHT;
-
-	// ---- Top Left
 	borderPoints.push_back(glm::vec2(-75.0f, 75.0f));
-
-	// ---- Left Wall
 	borderPoints.push_back(glm::vec2(-75.0f, -5.0f));
-
-	// ---- Long Inward Curve
 	borderPoints.push_back(glm::vec2(-60.0f, -20.0f));
 	borderPoints.push_back(glm::vec2(-45.0f, -32.0f));
 	borderPoints.push_back(glm::vec2(-32.0f, -40.0f));
-
-	// ---- Short Slope Into Drain
 	borderPoints.push_back(glm::vec2(-20.0f, -50.0f));
-
-	// ---- Vertical Drain Shaft (left)
 	borderPoints.push_back(glm::vec2(-20.0f, -200.0f));
-
-	// ---- Bottom of Drain
 	borderPoints.push_back(glm::vec2(20.0f, -200.0f));
-
-	// ---- Vertical Drain Shaft (right)
 	borderPoints.push_back(glm::vec2(20.0f, -50.0f));
-
-	// ---- Short Slope Out of Drain (mirror of -15,-50)
-	borderPoints.push_back(glm::vec2(32.0f, -40.0f));  // mirror of -32,-40
-
-	// ---- Long Outward Curve (mirrors)
+	borderPoints.push_back(glm::vec2(32.0f, -40.0f));
 	borderPoints.push_back(glm::vec2(45.0f, -32.0f));
 	borderPoints.push_back(glm::vec2(60.0f, -20.0f));
-
-	// ---- Right Wall
 	borderPoints.push_back(glm::vec2(75.0f, -5.0f));
-
-	// ---- Top Right
 	borderPoints.push_back(glm::vec2(75.0f, 75.0f));
 
-	Ball ball;
-	ball.radius = 2.0f;
-	ball.mass = Utils::PI * ball.radius * ball.radius;
+	obstacles.push_back(Obstacle(glm::vec2(0.0f, 30.0f), 8.0f));
+	obstacles.push_back(Obstacle(glm::vec2(-35.0f, 18.0f), 7.0f));
+	obstacles.push_back(Obstacle(glm::vec2(35.0f, 18.0f), 7.0f));
+	obstacles.push_back(Obstacle(glm::vec2(-20.0f, 0.0f), 4.0f));
+	obstacles.push_back(Obstacle(glm::vec2(20.0f, 0.0f), 10.0f));
 
-	// Left ball
-	ball.position = glm::vec2(-10.0f, 40.0f);
-	ball.velocity = glm::vec2(0.3f, 0.0f);
-	balls.push_back(ball);
-
-	// Right ball
-	ball.position = glm::vec2(10.0f, 40.0f);
-	ball.velocity = glm::vec2(-0.3f, 0.0f);
-	balls.push_back(ball);
-
-	// Top center
-	obstacles.push_back(Obstacle(glm::vec2(0.0f, 35.0f), 5.0f));
-
-	// Upper left
-	obstacles.push_back(Obstacle(glm::vec2(-18.0f, 28.0f), 4.0f));
-
-	// Upper right
-	obstacles.push_back(Obstacle(glm::vec2(18.0f, 28.0f), 4.0f));
-
-	// Middle
-	obstacles.push_back(Obstacle(glm::vec2(0.0f, 10.0f), 4.0f));
+	for (int i = 0; i < INITTIAL_BALL_COUNT; i++) {
+		spawnBall();
+	}
 
 	float radius = 1.5f;
 	float length = 16.0f;
 	float maxRotation = Utils::deg2Rad(50.0f);
 	float restAngle = Utils::deg2Rad(10.0f);
+	float upperRestAngle = Utils::deg2Rad(30.0f);
 	float angularVelocity = 8.0f;
 	float restitution = 0.2f;
 
 	glm::vec2 leftPivot = glm::vec2(-20.0f, -50.0f);
 	glm::vec2 rightPivot = glm::vec2(20.0f, -50.0f);
+	glm::vec2 upperLeftPivot = glm::vec2(-75.0f, -5.0f);
+	glm::vec2 upperRightPivot = glm::vec2(75.0f, -5.0f);
 
 	flippers.push_back(Flipper(leftPivot, radius, length, -restAngle, maxRotation, angularVelocity, restitution));
 	flippers.push_back(Flipper(rightPivot,radius, length, Utils::PI + restAngle, maxRotation, angularVelocity, restitution, false));
+	flippers.push_back(Flipper(upperLeftPivot, radius, length, -upperRestAngle, maxRotation, angularVelocity, restitution));
+	flippers.push_back(Flipper(upperRightPivot, radius, length, Utils::PI + upperRestAngle, maxRotation, angularVelocity, restitution, false));
 
-	flippers[0].id = LEFT;
-	flippers[1].id = RIGHT;
+	flippers[0].id = flippers[2].id = LEFT;
+	flippers[1].id = flippers[3].id = RIGHT;
 
 	// enemies
 	AnimatedSprite& enemyFlying = *objectToAnimatedSprite[FLYING_ENEMY];
 	AnimatedSprite& enemyDying = *objectToAnimatedSprite[DYING_ENEMY];
-	Enemy testEnemy1(glm::vec2(-20.0f, 0.0f), 5.0f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
-	Enemy testEnemy2(glm::vec2(0.0f, 0.0f), 5.0f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
-	Enemy testEnemy3(glm::vec2(20.0f, 0.0f), 5.0f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	Enemy testEnemy1(glm::vec2(-20.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	Enemy testEnemy2(glm::vec2(0.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	Enemy testEnemy3(glm::vec2(20.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
 	enemies.push_back(testEnemy1);
 	enemies.push_back(testEnemy2);
 	enemies.push_back(testEnemy3);
@@ -1042,8 +976,8 @@ void resetScene() {
 		leftmost = std::min(point.x, leftmost);
 		rightmost = std::max(point.x, rightmost);
 	}
-	ballSpawnPosLeft = glm::vec2(leftmost + BORDER_SIZE, highestY - BORDER_SIZE);
-	ballSpawnPosRight = glm::vec2(rightmost + BORDER_SIZE, highestY - BORDER_SIZE);
+	spawnPosLeft = glm::vec2(leftmost + BORDER_SIZE, highestY - BORDER_SIZE);
+	spawnPosRight = glm::vec2(rightmost + BORDER_SIZE, highestY - BORDER_SIZE);
 }
 
 void handleBallCollision(Ball& b1, Ball& b2, float restitution) {
@@ -1285,6 +1219,8 @@ void updateGame(float dt) {
 				enemyToBall = glm::normalize(enemyToBall);
 				ball.velocity = enemyToBall * (enemy.speedAbsorption * glm::length(ball.velocity));
 				enemy.setToDead();
+				comboTimer = COMBO_WINDOW;
+				comboCounter++;
 				break;
 			}
 		}
@@ -1292,9 +1228,23 @@ void updateGame(float dt) {
 		handleEnemyBorderCollision(enemy, borderPoints);
 	}
 
+	if (comboTimer > 0.0f) {
+		comboTimer -= dt;
+
+		if (comboTimer <= 0.0f) {
+			comboTimer = 0.0f;
+			comboCounter = 0;
+		}
+	}
+
+	if (comboCounter >= COMBO_TO_SPAWN_BALL) {
+		comboCounter = 0;
+		spawnBall();
+	}
+
 	while (numOfBallsToSpawn > 0) {
 		Ball ball = createBall();
-		ball.position = Utils::RandFloat() > 0.5f ? ballSpawnPosRight : ballSpawnPosLeft;
+		ball.position = Utils::RandFloat() > 0.5f ? spawnPosRight : spawnPosLeft;
 		balls.push_back(ball);
 		numOfBallsToSpawn--;
 	}
