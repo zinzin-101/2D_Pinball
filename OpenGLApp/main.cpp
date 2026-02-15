@@ -19,8 +19,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 void processInput(GLFWwindow* window);
 
 // settings
-const unsigned int WIDTH = 800;
-const unsigned int HEIGHT = 800;
+const unsigned int WIDTH = 1600;
+const unsigned int HEIGHT = 900;
 
 // glfw
 GLFWwindow* window = nullptr;
@@ -46,7 +46,7 @@ void initSquareData();
 void initGLData();
 
 // simulation
-const float WORLD_WIDTH = 85.0f;
+const float WORLD_WIDTH = 151.1f;
 const float WORLD_HEIGHT = 85.0f;
 const float FIX_DT = 1.0f / 60.0f;
 float deltaTime = 0.0f;
@@ -298,6 +298,7 @@ struct AnimatedSprite {
 	float timer;
 	glm::vec2 animationOffset;
 	AnimatedSprite(Shader& shader, Sprite& sprite) : shader(&shader), sprite(&sprite), frameCount(0), currentFrame(0), timePerFrame(0.0f), timer(0.0f), animationOffset(0.0f) {}
+	AnimatedSprite():shader(nullptr), sprite(nullptr), frameCount(0), currentFrame(0), timePerFrame(0.0f), timer(0.0f), animationOffset(0.0f) {}
 
 	void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f), bool isRadian = false) {
 		shader->use();
@@ -370,11 +371,17 @@ struct Enemy : Circle {
 		Circle(position, radius),
 		flyingSprite(flyingSprite), dyingSprite(dyingSprite),
 		isDead(false), isFacingRight(isFacingRight), velocity(velocity), currentSprite(nullptr), canRemove(false) {
-		this->flyingSprite.frameCount = flyingSprite.frameCount;
-		this->flyingSprite.timePerFrame = flyingSprite.timePerFrame;
-		this->dyingSprite.frameCount = dyingSprite.frameCount;
-		this->dyingSprite.timePerFrame = dyingSprite.timePerFrame;
 		currentSprite = &this->flyingSprite;
+	}
+
+	Enemy(const Enemy& other): Circle(other.position, other.radius) {
+		this->flyingSprite = other.flyingSprite;
+		this->dyingSprite = other.dyingSprite;
+		this->isDead = other.isDead;
+		this->isFacingRight = other.isFacingRight;
+		this->velocity = other.velocity;
+		this->currentSprite = &this->flyingSprite;
+		this->canRemove = other.canRemove;
 	}
 
 	void update(float dt) {
@@ -411,7 +418,14 @@ enum ObjectType {
 	BORDER,
 	FLIPPER
 };
+
+enum AnimatedObject {
+	FLYING_ENEMY,
+	DYING_ENEMY
+};
+
 Sprite* objectToSprite[4];
+AnimatedSprite* objectToAnimatedSprite[2];
 const float BORDER_SPRITE_SCALE = 0.1f;
 
 // controls
@@ -454,7 +468,6 @@ int main() {
 	Shader animationShader("animation.vs", "animation.fs");
 	initGLData();
 
-	resetScene();
 
 	stbi_set_flip_vertically_on_load(true);
 	glEnable(GL_BLEND);
@@ -481,18 +494,15 @@ int main() {
 	AnimatedSprite enemyFlying = AnimatedSprite(animationShader, enemyFlyingSprite);
 	enemyFlying.frameCount = 4;
 	enemyFlying.timePerFrame = 0.1f;
+	objectToAnimatedSprite[FLYING_ENEMY] = &enemyFlying;
 	
 	Sprite enemyDyingSprite = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/enemy_dying.png").c_str()), true));
 	AnimatedSprite enemyDying = AnimatedSprite(animationShader, enemyDyingSprite);
 	enemyDying.frameCount = 7;
 	enemyDying.timePerFrame = 0.05f;
+	objectToAnimatedSprite[DYING_ENEMY] = &enemyDying;
 
-	Enemy testEnemy1(glm::vec2(-4.0f, 0.0f), 1.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
-	Enemy testEnemy2(glm::vec2(0.0f, 0.0f), 2.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
-	Enemy testEnemy3(glm::vec2(4.0f, 0.0f), 3.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
-	enemies.push_back(testEnemy1);
-	enemies.push_back(testEnemy2);
-	enemies.push_back(testEnemy3);
+	resetScene();
 
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
@@ -817,6 +827,7 @@ void resetScene() {
 	balls.clear();
 	flippers.clear();
 	obstacles.clear();
+	enemies.clear();
 
 	// init simulation
 	//borderPoints.push_back(glm::vec2(-25.0f, 35.0f));
@@ -886,19 +897,19 @@ void resetScene() {
 
 	// ---- OBSTACLES (all inside borders) ----
 
-	// Top bumpers
-	obstacles.push_back(Obstacle(glm::vec2(0.0f, 28.0f), 4.0f));
-	obstacles.push_back(Obstacle(glm::vec2(-10.0f, 24.0f), 3.0f));
-	obstacles.push_back(Obstacle(glm::vec2(10.0f, 24.0f), 3.0f));
+	//// Top bumpers
+	//obstacles.push_back(Obstacle(glm::vec2(0.0f, 28.0f), 4.0f));
+	//obstacles.push_back(Obstacle(glm::vec2(-10.0f, 24.0f), 3.0f));
+	//obstacles.push_back(Obstacle(glm::vec2(10.0f, 24.0f), 3.0f));
 
-	// Midfield chaos
-	obstacles.push_back(Obstacle(glm::vec2(-12.0f, 10.0f), 2.5f));
-	obstacles.push_back(Obstacle(glm::vec2(0.0f, 8.0f), 4.5f));
-	obstacles.push_back(Obstacle(glm::vec2(12.0f, 10.0f), 2.5f));
+	//// Midfield chaos
+	//obstacles.push_back(Obstacle(glm::vec2(-12.0f, 10.0f), 2.5f));
+	//obstacles.push_back(Obstacle(glm::vec2(0.0f, 8.0f), 4.5f));
+	//obstacles.push_back(Obstacle(glm::vec2(12.0f, 10.0f), 2.5f));
 
-	// Side nudgers (guide balls toward flippers, not block drain)
-	obstacles.push_back(Obstacle(glm::vec2(-12.0f, -4.0f), 2.0f));
-	obstacles.push_back(Obstacle(glm::vec2(12.0f, -4.0f), 2.0f));
+	//// Side nudgers (guide balls toward flippers, not block drain)
+	//obstacles.push_back(Obstacle(glm::vec2(-12.0f, -4.0f), 2.0f));
+	//obstacles.push_back(Obstacle(glm::vec2(12.0f, -4.0f), 2.0f));
 
 	// ---- FLIPPERS (attached to lower slopes) ----
 	float radius = 1.0f;
@@ -916,6 +927,16 @@ void resetScene() {
 
 	flippers[0].id = 0;
 	flippers[1].id = 1;
+
+	// enemies
+	AnimatedSprite& enemyFlying = *objectToAnimatedSprite[FLYING_ENEMY];
+	AnimatedSprite& enemyDying = *objectToAnimatedSprite[DYING_ENEMY];
+	Enemy testEnemy1(glm::vec2(-20.0f, 0.0f), 5.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
+	Enemy testEnemy2(glm::vec2(0.0f, 0.0f), 5.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
+	Enemy testEnemy3(glm::vec2(20.0f, 0.0f), 5.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
+	enemies.push_back(testEnemy1);
+	enemies.push_back(testEnemy2);
+	enemies.push_back(testEnemy3);
 }
 
 void handleBallCollision(Ball& b1, Ball& b2, float restitution) {
@@ -1113,7 +1134,7 @@ void updateGame(float dt) {
 
 		for (Ball& ball : balls) {
 			if (checkCircleCollision(enemy, ball)) {
-				//enemy.setToDead();
+				enemy.setToDead();
 				break;
 			}
 		}
