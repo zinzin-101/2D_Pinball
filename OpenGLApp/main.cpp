@@ -10,6 +10,7 @@
 #include "stb_image.h"
 
 #include <iostream>
+#include <limits>
 #include <thread>
 #include <map>
 #include <vector>
@@ -416,11 +417,17 @@ void handleEnemyBorderCollision(Enemy& enemy, std::vector<glm::vec2>& borderPoin
 void updateGame(float dt);
 void renderEnemy(Enemy& enemy, Shader* debugShader);
 void renderEnemies(Shader* debugShader);
+void spawnBall();
+Ball createBall();
 
 std::vector<Enemy> enemies;
 GameState gameState = RUNNING;
 float lowestFlipperY = FLT_MAX;
 float ballDespawnHeight = FLT_MAX;
+const int COMBO_TO_SPAWN_BALL = 3;
+glm::vec2 ballSpawnPosLeft, ballSpawnPosRight;
+int comboCounter = 0;
+int numOfBallsToSpawn = 0;
 
 enum ObjectType {
 	BALL,
@@ -587,6 +594,10 @@ void processInput(GLFWwindow* window) {
 
 	if (getKeyDown(window, GLFW_KEY_R)) {
 		resetScene();
+	}
+
+	if (getKeyDown(window, GLFW_KEY_SPACE)) {
+		spawnBall();
 	}
 }
 
@@ -866,6 +877,8 @@ void resetScene() {
 	enemies.clear();
 
 	gameState = RUNNING;
+	comboCounter = 0;
+	numOfBallsToSpawn = 0;
 
 	//borderPoints.push_back(glm::vec2(-25.0f, 35.0f)); // top left
 	//borderPoints.push_back(glm::vec2(-25.0f, -10.0f)); // left wall
@@ -1020,6 +1033,17 @@ void resetScene() {
 		}
 	}
 	ballDespawnHeight = (lowestPoint + secondLowestPoint) / 2.0f;
+
+	float highestY = std::numeric_limits<float>::lowest();
+	float leftmost = FLT_MAX;
+	float rightmost = std::numeric_limits<float>::lowest();
+	for (glm::vec2& point : borderPoints) {
+		highestY = std::max(point.y, highestY);
+		leftmost = std::min(point.x, leftmost);
+		rightmost = std::max(point.x, rightmost);
+	}
+	ballSpawnPosLeft = glm::vec2(leftmost + BORDER_SIZE, highestY - BORDER_SIZE);
+	ballSpawnPosRight = glm::vec2(rightmost + BORDER_SIZE, highestY - BORDER_SIZE);
 }
 
 void handleBallCollision(Ball& b1, Ball& b2, float restitution) {
@@ -1268,6 +1292,13 @@ void updateGame(float dt) {
 		handleEnemyBorderCollision(enemy, borderPoints);
 	}
 
+	while (numOfBallsToSpawn > 0) {
+		Ball ball = createBall();
+		ball.position = Utils::RandFloat() > 0.5f ? ballSpawnPosRight : ballSpawnPosLeft;
+		balls.push_back(ball);
+		numOfBallsToSpawn--;
+	}
+
 	for (std::vector<Ball>::iterator itr = balls.end() - 1; itr != balls.begin() - 1; --itr) {
 		Ball& ball = *itr;
 		if (ball.position.y < ballDespawnHeight) {
@@ -1298,4 +1329,15 @@ void renderEnemies(Shader* debugShader = nullptr) {
 	for (Enemy& enemy : enemies) {
 		renderEnemy(enemy, debugShader);
 	}
+}
+
+void spawnBall() {
+	numOfBallsToSpawn++;
+}
+
+Ball createBall() {
+	Ball ball;
+	ball.radius = 2.0f;
+	ball.mass = Utils::PI * ball.radius * ball.radius;
+	return ball;
 }
