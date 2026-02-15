@@ -124,18 +124,18 @@ void handleBallCollision(Ball& b1, Ball& b2, float restitution);
 void handleBallObstacleCollision(Ball& ball, Obstacle& obstacle);
 void handleBallFlipperCollision(Ball& ball, Flipper& flipper);
 void handleBallBorderCollision(Ball& ball, std::vector<glm::vec2>& borderPoints);
-void updateSimulation(std::vector<Ball>& balls, std::vector<Obstacle>& obstacles, std::vector<Flipper>& flippers, std::vector<glm::vec2>& borderPoints, float dt);
+void updateSimulation(float dt);
 
 // rendering
 void drawCircle(Shader& shader, glm::vec3 position, float radius, glm::vec3 color);
 void drawSquareLine(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, float radius, glm::vec3 color);
-void renderBalls(Shader& shader, std::vector<Ball>& balls);
-void renderObstacles(Shader& shader, std::vector<Obstacle>& obstacles);
-void renderFlippers(Shader& shader, std::vector<Flipper>& flippers);
-void renderBorder(Shader& shader, std::vector<glm::vec2>& borderPoints);
+void renderBalls(Shader& shader);
+void renderObstacles(Shader& shader);
+void renderFlippers(Shader& shader);
+void renderBorder(Shader& shader);
 
 // debugging
-//#define DRAW_DEBUG
+#define DRAW_DEBUG
 void drawSquareOutline(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, float radius);
 void drawCircleOutline(Shader& shader, glm::vec3 position, float radius);
 
@@ -175,12 +175,12 @@ struct Texture {
 };
 
 struct Sprite {
-	Shader& shader;
+	Shader* shader;
 	Texture texture;
 	GLuint quadVAO;
 	bool isFlipped;
 	glm::vec3 offset;
-	Sprite(Shader& shader, Texture texture): shader(shader), texture(texture), isFlipped(false), offset(0.0f) {
+	Sprite(Shader& shader, Texture texture): shader(&shader), texture(texture), isFlipped(false), offset(0.0f) {
 		initRenderData();
 	}
 
@@ -188,8 +188,8 @@ struct Sprite {
 		glDeleteVertexArrays(1, &this->quadVAO);
 	}
 
-	virtual void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color, bool isRadian = false) {
-		shader.use();
+	virtual void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f), bool isRadian = false) {
+		shader->use();
 		glm::mat4 model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(position));
 		model = glm::translate(model, glm::vec3(offset));
@@ -199,8 +199,8 @@ struct Sprite {
 		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
 		//model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 
-		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 0.0f));
-		model = glm::scale(model, glm::vec3(size));
+		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 1.0f));
+		model = glm::scale(model, glm::vec3(size.x, size.y, 1.0f));
 
 		glm::mat4 projection = glm::ortho(
 			-(WORLD_WIDTH / 2.0f), (WORLD_WIDTH / 2.0f),
@@ -209,10 +209,10 @@ struct Sprite {
 		);
 
 
-		shader.setMat4("model", model);
-		shader.setMat4("projection", projection);
-		shader.setBool("enableTiling", false);
-		shader.setVec3("color", color);
+		shader->setMat4("model", model);
+		shader->setMat4("projection", projection);
+		shader->setBool("enableTiling", false);
+		shader->setVec3("color", color);
 
 		glActiveTexture(GL_TEXTURE0);
 		texture.bind();
@@ -254,7 +254,7 @@ struct SquareLineSprite : Sprite {
 	float spriteScale;
 	SquareLineSprite(Shader& shader, Texture texture): Sprite(shader, texture), useTiling(false), spriteScale(1.0f) {}
 	virtual void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color, bool isRadian = false) override {
-		this->shader.use();
+		this->shader->use();
 		glm::mat4 model = glm::mat4(1.0f);
 
 		model = glm::translate(model, glm::vec3(position));
@@ -262,9 +262,9 @@ struct SquareLineSprite : Sprite {
 		float angle = isRadian ? rotation : glm::radians(rotation);
 		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
 		model = glm::translate(model, glm::vec3(0.0f, -0.5f * size.y, 0.0f));
-		model = glm::scale(model, glm::vec3(size));
+		model = glm::scale(model, glm::vec3(size.x, size.y, 1.0f));
 		model = glm::translate(model, glm::vec3(isFlipped ? 1.0f: 0.0f, 0.0f, 0.0f));
-		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 0.0f));
+		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 1.0f));
 
 
 		glm::mat4 projection = glm::ortho(
@@ -274,11 +274,11 @@ struct SquareLineSprite : Sprite {
 		);
 
 
-		shader.setMat4("model", model);
-		shader.setMat4("projection", projection);
-		shader.setBool("enableTiling", useTiling);
-		shader.setVec2("tiling", size.x * spriteScale, size.y * spriteScale);
-		shader.setVec3("color", color);
+		shader->setMat4("model", model);
+		shader->setMat4("projection", projection);
+		shader->setBool("enableTiling", useTiling);
+		shader->setVec2("tiling", size.x * spriteScale, size.y * spriteScale);
+		shader->setVec3("color", color);
 
 		glActiveTexture(GL_TEXTURE0);
 		texture.bind();
@@ -289,27 +289,29 @@ struct SquareLineSprite : Sprite {
 	}
 };
 
-struct AnimatedSprite : Sprite {
+struct AnimatedSprite {
+	Sprite* sprite;
+	Shader* shader;
 	unsigned int frameCount;
 	unsigned int currentFrame;
 	float timePerFrame;
 	float timer;
 	glm::vec2 animationOffset;
-	AnimatedSprite(Shader& shader, Texture texture) : Sprite(shader, texture), frameCount(0), currentFrame(0), timePerFrame(0.0f), timer(0.0f), animationOffset(0.0f) {}
+	AnimatedSprite(Shader& shader, Sprite& sprite) : shader(&shader), sprite(&sprite), frameCount(0), currentFrame(0), timePerFrame(0.0f), timer(0.0f), animationOffset(0.0f) {}
 
-	virtual void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color, bool isRadian = false) {
-		shader.use();
+	void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f), bool isRadian = false) {
+		shader->use();
 		glm::mat4 model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(position));
-		model = glm::translate(model, glm::vec3(offset));
+		model = glm::translate(model, glm::vec3(sprite->offset));
 
 		model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 		float angle = isRadian ? rotation : glm::radians(rotation);
 		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
 		//model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 
-		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 0.0f));
-		model = glm::scale(model, glm::vec3(size));
+		model = glm::scale(model, glm::vec3(sprite->isFlipped ? -1.0f : 1.0f, 1.0f, 1.0f));
+		model = glm::scale(model, glm::vec3(size.x, size.y, 1.0f));
 
 		glm::mat4 projection = glm::ortho(
 			-(WORLD_WIDTH / 2.0f), (WORLD_WIDTH / 2.0f),
@@ -317,17 +319,17 @@ struct AnimatedSprite : Sprite {
 			-1.0f, 1.0f
 		);
 
-		shader.setMat4("model", model);
-		shader.setMat4("projection", projection);
-		shader.setVec3("color", color);
+		shader->setMat4("model", model);
+		shader->setMat4("projection", projection);
+		shader->setVec3("color", color);
 
-		shader.setVec2("offset", animationOffset);
-		shader.setVec2("frameScale", glm::vec2(1.0f / (float)frameCount, 1.0f));
+		shader->setVec2("offset", animationOffset);
+		shader->setVec2("frameScale", glm::vec2(1.0f / (float)frameCount, 1.0f));
 
 		glActiveTexture(GL_TEXTURE0);
-		texture.bind();
+		sprite->texture.bind();
 
-		glBindVertexArray(this->quadVAO);
+		glBindVertexArray(sprite->quadVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 		glBindVertexArray(0);
 	}
@@ -348,6 +350,60 @@ struct AnimatedSprite : Sprite {
 
 Texture loadTextureFromFile(const char* filename, bool hasAlpha);
 void drawTexturedSquareLine(Sprite* sprite, glm::vec3 startPos, glm::vec3 endPos, float radius);
+
+// game data
+enum GameState {
+	RUNNING,
+	GAME_OVER
+};
+
+struct Enemy : Circle {
+	AnimatedSprite flyingSprite;
+	AnimatedSprite dyingSprite;
+	bool isDead;
+	bool isFacingRight;
+	glm::vec2 velocity;
+	AnimatedSprite* currentSprite;
+	bool canRemove;
+
+	Enemy(glm::vec2 position, float radius, AnimatedSprite& flyingSprite, AnimatedSprite& dyingSprite, bool isFacingRight, glm::vec2 velocity) :
+		Circle(position, radius),
+		flyingSprite(flyingSprite), dyingSprite(dyingSprite),
+		isDead(false), isFacingRight(isFacingRight), velocity(velocity), currentSprite(nullptr), canRemove(false) {
+		this->flyingSprite.frameCount = flyingSprite.frameCount;
+		this->flyingSprite.timePerFrame = flyingSprite.timePerFrame;
+		this->dyingSprite.frameCount = dyingSprite.frameCount;
+		this->dyingSprite.timePerFrame = dyingSprite.timePerFrame;
+		currentSprite = &this->flyingSprite;
+	}
+
+	void update(float dt) {
+		currentSprite->update(dt);
+
+		if (isDead) {
+			if (currentSprite->currentFrame >= currentSprite->frameCount - 1) {
+				canRemove = true;
+			}
+			return;
+		}
+
+		position += velocity * dt;
+	}
+
+	void setToDead() {
+		isDead = true;
+		currentSprite = &dyingSprite;
+	}
+};
+
+bool checkCircleCollision(Circle& c1, Circle& c2);
+void updateGame(float dt);
+void renderEnemy(Enemy& enemy, Shader* debugShader);
+void renderEnemies(Shader* debugShader);
+
+std::vector<Enemy> enemies;
+GameState gameState = RUNNING;
+
 
 enum ObjectType {
 	BALL,
@@ -421,9 +477,22 @@ int main() {
 	Sprite obstacleSprite = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/sand.png").c_str()), true));
 	objectToSprite[OBSTACLE] = &obstacleSprite;
 
-	AnimatedSprite fireSprite = AnimatedSprite(animationShader, loadTextureFromFile((FileSystem::getPath("resources/fire.png").c_str()), true));
-	fireSprite.frameCount = 4;
-	fireSprite.timePerFrame = 0.05f;
+	Sprite enemyFlyingSprite = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/enemy_flying.png").c_str()), true));
+	AnimatedSprite enemyFlying = AnimatedSprite(animationShader, enemyFlyingSprite);
+	enemyFlying.frameCount = 4;
+	enemyFlying.timePerFrame = 0.1f;
+	
+	Sprite enemyDyingSprite = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/enemy_dying.png").c_str()), true));
+	AnimatedSprite enemyDying = AnimatedSprite(animationShader, enemyDyingSprite);
+	enemyDying.frameCount = 7;
+	enemyDying.timePerFrame = 0.05f;
+
+	Enemy testEnemy1(glm::vec2(-4.0f, 0.0f), 1.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
+	Enemy testEnemy2(glm::vec2(0.0f, 0.0f), 2.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
+	Enemy testEnemy3(glm::vec2(4.0f, 0.0f), 3.0f, enemyFlying, enemyDying, true, glm::vec2(0.0f));
+	enemies.push_back(testEnemy1);
+	enemies.push_back(testEnemy2);
+	enemies.push_back(testEnemy3);
 
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
@@ -432,22 +501,17 @@ int main() {
 		deltaTime = currentTime - lastTime;
 		lastTime = currentTime;
 
-		updateSimulation(balls, obstacles, flippers, borderPoints, deltaTime);
+		updateSimulation(deltaTime);
+		updateGame(deltaTime);
 
 		// render
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
-		renderBalls(circleShader, balls);
-		renderObstacles(circleShader, obstacles);
-		renderFlippers(squareShader, flippers);
-		renderBorder(squareShader, borderPoints);
-
-		//fireSprite.drawSprite(glm::vec3(0.0f), glm::vec3(10.0f), 0.0f, glm::vec3(1.0f));
-		//fireSprite.update(deltaTime);
-
-		// test
-		//testSprite.drawSprite(testTexture, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(10.f), 0.0f, glm::vec3(1.0f));
-		//testSprite2.drawSprite(testTexture, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(10.f), 0.0f, glm::vec3(0.0f, 1.0, 0.0f));
+		renderBalls(circleShader);
+		renderObstacles(circleShader);
+		renderFlippers(squareShader);
+		renderBorder(squareShader);
+		renderEnemies(&circleShader);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -638,7 +702,7 @@ void drawSquareLine(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, float 
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-void renderBalls(Shader& shader, std::vector<Ball>& balls) {
+void renderBalls(Shader& shader) {
 	for (const Ball& ball : balls) {
 		//drawCircle(shader, glm::vec3(ball.position, 0.0f), ball.radius, glm::vec3(1.0f));
 		objectToSprite[BALL]->drawSprite(glm::vec3(ball.position, 0.0f), glm::vec3(2.0f * ball.radius), 0.0f, glm::vec3(1.0f), true);
@@ -651,7 +715,7 @@ void renderBalls(Shader& shader, std::vector<Ball>& balls) {
 	#endif
 }
 
-void renderObstacles(Shader& shader, std::vector<Obstacle>& obstacles) {
+void renderObstacles(Shader& shader) {
 	for (const Obstacle& obstacle : obstacles) {
 		//drawCircle(shader, glm::vec3(obstacle.position, 0.0f), obstacle.radius, glm::vec3(1.0f, 1.0f, 0.0f));
 		objectToSprite[OBSTACLE]->drawSprite(glm::vec3(obstacle.position, 0.0f), glm::vec3(2.0f * obstacle.radius), 0.0f, glm::vec3(1.0f));
@@ -663,7 +727,7 @@ void renderObstacles(Shader& shader, std::vector<Obstacle>& obstacles) {
 	}
 	#endif
 }
-void renderFlippers(Shader& shader, std::vector<Flipper>& flippers) {
+void renderFlippers(Shader& shader) {
 	for (const Flipper& flipper : flippers) {
 		glm::vec3 startPos = glm::vec3(flipper.position, 0.0f);
 		glm::vec3 endPos = glm::vec3(flipper.getFlipperEnd(), 0.0f);
@@ -689,7 +753,7 @@ void renderFlippers(Shader& shader, std::vector<Flipper>& flippers) {
 	}
 	#endif
 }
-void renderBorder(Shader& shader, std::vector<glm::vec2>& borderPoints) {
+void renderBorder(Shader& shader) {
 	int n = borderPoints.size();
 	for (int i = 0; i < n; i++) {
 		glm::vec3 startPos = glm::vec3(borderPoints[i], 0.0f);
@@ -959,7 +1023,7 @@ void handleBallBorderCollision(Ball& ball, std::vector<glm::vec2>& borderPoints)
 	ball.velocity += d * (newV - v);
 }
 
-void updateSimulation(std::vector<Ball>& balls, std::vector<Obstacle>& obstacles, std::vector<Flipper>& flippers, std::vector<glm::vec2>& borderPoints, float dt) {
+void updateSimulation(float dt) {
 	for (Flipper& flipper : flippers) {
 		flipper.update(dt);
 	}
@@ -1026,4 +1090,52 @@ void drawTexturedSquareLine(Sprite* sprite, glm::vec3 startPos, glm::vec3 endPos
 	float angle = glm::atan(dir.y, dir.x);
 
 	sprite->drawSprite(startPos, glm::vec3(length, radius, 0.0f), angle, glm::vec3(1.0f), true);
+}
+
+bool checkCircleCollision(Circle& c1, Circle& c2) {
+	float distance = glm::length(c1.position - c2.position);
+	return distance < (c1.radius + c2.radius);
+}
+
+void updateGame(float dt) {
+	for (Enemy& enemy : enemies) {
+		enemy.update(dt);
+
+		float lowestY = FLT_MAX;
+		for (Flipper& flipper : flippers) {
+			lowestY = glm::min(flipper.position.y, lowestY);
+		}
+
+		if (enemy.position.y + enemy.radius < lowestY) {
+			gameState = GAME_OVER;
+			break;
+		}
+
+		for (Ball& ball : balls) {
+			if (checkCircleCollision(enemy, ball)) {
+				//enemy.setToDead();
+				break;
+			}
+		}
+	}
+
+	for (int i = enemies.size() - 1; i >= 0; i--) {
+		if (enemies.at(i).canRemove) {
+			enemies.erase(enemies.begin() + i);
+		}
+	}
+}
+
+void renderEnemy(Enemy& enemy, Shader* debugShader = nullptr) {
+	enemy.currentSprite->drawSprite(glm::vec3(enemy.position, 0.0f), glm::vec3(enemy.radius * 2.0f), 0.0f, glm::vec3(1.0f));
+	#ifdef DRAW_DEBUG
+	if (debugShader != nullptr)
+		drawCircleOutline(*debugShader, glm::vec3(enemy.position, 0.0f), enemy.radius);
+	#endif
+}
+
+void renderEnemies(Shader* debugShader = nullptr) {
+	for (Enemy& enemy : enemies) {
+		renderEnemy(enemy, debugShader);
+	}
 }
