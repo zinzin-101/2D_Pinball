@@ -426,6 +426,7 @@ Ball createBall();
 void spawnEnemy();
 void handleEnemySpawn(float dt);
 void handleUpdateSpawnParameters(float dt);
+void handleScore(float dt);
 
 std::vector<Enemy> enemies;
 GameState gameState = RUNNING;
@@ -443,6 +444,10 @@ const float ENEMY_SPAWN_INTERVAL_DECREASE_RATE_MULTIPLIER = 0.95f;
 const float ENEMY_SPEED_INCREASE_RATE_MULTIPLIER = 1.05f;
 const float TIME_PER_PARAMETERS_UPDATE = 15.0f;
 const float COMBO_WINDOW = 1.0f;
+const int SCORE_PER_SCORING_INTERVAL = 10;
+const int SCORE_PER_ENEMY = 50;
+const float COMBO_SCORE_MULTIPLIER = 1.5f;
+const float TIME_PER_SCORING_INTERVAL = 5.0f;
 int comboCounter = 0;
 float comboTimer = 0.0f;
 float enemySpawnInterval = INITIAL_ENEMY_SPAWN_INTERVAL;
@@ -450,6 +455,8 @@ float enemyDescendSpeed = INITIAL_ENEMY_DESCEND_SPEED;
 float enemyMaxHorizontalSpeed = INITIAL_ENEMY_MAX_HORIZONTAL_SPEED;
 float enemySpawnTimer = 0.0f;
 float parameterTimer = 0.0f;
+float scoreIntervalTimer = 0.0f;
+int score = 0;
 
 enum ObjectType {
 	BALL,
@@ -553,7 +560,7 @@ int main() {
 		updateSimulation(deltaTime);
 		updateGame(deltaTime);
 
-		//std::cout << gameState << std::endl;
+		//std::cout << "score: " << score << std::endl;
 
 		// render
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -909,6 +916,9 @@ void resetScene() {
 	enemySpawnTimer = 0.0f;
 	parameterTimer = 0.0f;
 
+	scoreIntervalTimer = TIME_PER_SCORING_INTERVAL;
+	score = 0;
+
 	borderPoints.push_back(glm::vec2(-75.0f, 75.0f));
 	borderPoints.push_back(glm::vec2(-75.0f, -5.0f));
 	borderPoints.push_back(glm::vec2(-60.0f, -20.0f));
@@ -1229,6 +1239,7 @@ void updateGame(float dt) {
 	handleObjectDeletion();
 	handleEnemySpawn(dt);
 	handleUpdateSpawnParameters(dt);
+	handleScore(dt);
 }
 
 void updateEnemies(float dt) {
@@ -1250,6 +1261,7 @@ void updateEnemies(float dt) {
 				enemy.setToDead();
 				comboTimer = COMBO_WINDOW;
 				comboCounter++;
+				score += comboCounter > 1 ? SCORE_PER_ENEMY * COMBO_SCORE_MULTIPLIER : SCORE_PER_ENEMY;
 				break;
 			}
 		}
@@ -1359,5 +1371,13 @@ void handleUpdateSpawnParameters(float dt) {
 		enemySpawnInterval *= ENEMY_SPAWN_INTERVAL_DECREASE_RATE_MULTIPLIER;
 		enemyDescendSpeed *= ENEMY_SPEED_INCREASE_RATE_MULTIPLIER;
 		enemyMaxHorizontalSpeed *= ENEMY_SPEED_INCREASE_RATE_MULTIPLIER;
+	}
+}
+
+void handleScore(float dt) {
+	scoreIntervalTimer -= dt;
+	if (scoreIntervalTimer <= 0.0f) {
+		scoreIntervalTimer = TIME_PER_SCORING_INTERVAL;
+		score += SCORE_PER_SCORING_INTERVAL;
 	}
 }
