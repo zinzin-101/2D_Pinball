@@ -948,9 +948,17 @@ void resetScene() {
 	Enemy testEnemy1(glm::vec2(-20.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
 	Enemy testEnemy2(glm::vec2(0.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
 	Enemy testEnemy3(glm::vec2(20.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+
+	Enemy testEnemy4(glm::vec2(-10.0f, 12.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	Enemy testEnemy5(glm::vec2(1.0f, 12.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	Enemy testEnemy6(glm::vec2(10.0f, 12.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+
 	enemies.push_back(testEnemy1);
 	enemies.push_back(testEnemy2);
 	enemies.push_back(testEnemy3);
+	enemies.push_back(testEnemy4);
+	enemies.push_back(testEnemy5);
+	enemies.push_back(testEnemy6);
 
 	lowestFlipperY = FLT_MAX;
 	for (Flipper& flipper : flippers) {
