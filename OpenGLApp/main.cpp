@@ -474,6 +474,35 @@ Sprite* objectToSprite[4];
 AnimatedSprite* objectToAnimatedSprite[2];
 const float BORDER_SPRITE_SCALE = 0.1f;
 
+// text object
+std::map<char, Sprite*> charToNumberSprite;
+const float DEFAULT_TEXT_GAP = 1.0f;
+struct NumberText {
+	int value;
+	NumberText(): value(0) {}
+	NumberText(int value): value(value) {}
+	void drawText(glm::vec3 position, float size, float rotation = 0.0f) {
+		std::string strValue = std::to_string(value);
+		int length = strValue.length();
+		std::vector<Sprite*> numberSprites(length);
+		for (int i = 0; i < length; i++) {
+			numberSprites[i] = charToNumberSprite.at(strValue[i]);
+		}
+		glm::vec3 textPos = position;
+		for (Sprite* numberSprite : numberSprites) {
+			numberSprite->drawSprite(textPos, glm::vec3(size), rotation);
+			textPos.x += DEFAULT_TEXT_GAP * size;
+		}
+	}
+};
+
+NumberText scoreText;
+const glm::vec3 SCORE_TEXT_POSITION = glm::vec3(-105.0f, 50.0f, 0.0f);
+const float SCORE_TEXT_SIZE = 10.0f;
+const glm::vec2 WORLD_OFFSET = glm::vec2(25.0f, 0.0f);
+void renderScoreText();
+void offsetEverythingBy(glm::vec2 offset);
+
 // controls
 std::map<unsigned, bool> keyDownMap;
 bool getKeyDown(GLFWwindow* window, unsigned int key);
@@ -519,9 +548,7 @@ int main() {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	//Sprite testSprite = SquareLineSprite(textureShader);
-	//SquareLineSprite testSprite2 = SquareLineSprite(textureShader);
-	//Texture testTexture = loadTextureFromFile((FileSystem::getPath("resources/enemyTexture.png").c_str()), true);
+	// init sprite
 	SquareLineSprite borderSprite = SquareLineSprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/stone.png").c_str()), true));
 	borderSprite.useTiling = true;
 	borderSprite.spriteScale = BORDER_SPRITE_SCALE;
@@ -548,6 +575,28 @@ int main() {
 	enemyDying.timePerFrame = 0.05f;
 	objectToAnimatedSprite[DYING_ENEMY] = &enemyDying;
 
+	// init text sprite
+	Sprite number0 = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/numbers/number0.png").c_str()), true));
+	Sprite number1 = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/numbers/number1.png").c_str()), true));
+	Sprite number2 = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/numbers/number2.png").c_str()), true));
+	Sprite number3 = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/numbers/number3.png").c_str()), true));
+	Sprite number4 = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/numbers/number4.png").c_str()), true));
+	Sprite number5 = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/numbers/number5.png").c_str()), true));
+	Sprite number6 = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/numbers/number6.png").c_str()), true));
+	Sprite number7 = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/numbers/number7.png").c_str()), true));
+	Sprite number8 = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/numbers/number8.png").c_str()), true));
+	Sprite number9 = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/numbers/number9.png").c_str()), true));
+	charToNumberSprite['0'] = &number0;
+	charToNumberSprite['1'] = &number1;
+	charToNumberSprite['2'] = &number2;
+	charToNumberSprite['3'] = &number3;
+	charToNumberSprite['4'] = &number4;
+	charToNumberSprite['5'] = &number5;
+	charToNumberSprite['6'] = &number6;
+	charToNumberSprite['7'] = &number7;
+	charToNumberSprite['8'] = &number8;
+	charToNumberSprite['9'] = &number9;
+
 	resetScene();
 
 	while (!glfwWindowShouldClose(window)) {
@@ -557,10 +606,9 @@ int main() {
 		deltaTime = currentTime - lastTime;
 		lastTime = currentTime;
 
+		// update
 		updateSimulation(deltaTime);
 		updateGame(deltaTime);
-
-		//std::cout << "score: " << score << std::endl;
 
 		// render
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -570,6 +618,7 @@ int main() {
 		renderObstacles(circleShader);
 		renderFlippers(squareShader);
 		renderBorder(squareShader);
+		renderScoreText();
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -963,6 +1012,8 @@ void resetScene() {
 
 	flippers[0].id = flippers[2].id = LEFT;
 	flippers[1].id = flippers[3].id = RIGHT;
+
+	offsetEverythingBy(WORLD_OFFSET);
 
 	// enemies
 	//AnimatedSprite& enemyFlying = *objectToAnimatedSprite[FLYING_ENEMY];
@@ -1379,5 +1430,32 @@ void handleScore(float dt) {
 	if (scoreIntervalTimer <= 0.0f) {
 		scoreIntervalTimer = TIME_PER_SCORING_INTERVAL;
 		score += SCORE_PER_SCORING_INTERVAL;
+	}
+}
+
+void renderScoreText() {
+	scoreText.value = score;
+	scoreText.drawText(SCORE_TEXT_POSITION, SCORE_TEXT_SIZE);
+}
+
+void offsetEverythingBy(glm::vec2 offset) {
+	for (glm::vec2& point : borderPoints) {
+		point += offset;
+	}
+
+	for (Ball& ball : balls) {
+		ball.position += offset;
+	}
+
+	for (Obstacle& obstacle : obstacles) {
+		obstacle.position += offset;
+	}
+
+	for (Flipper& flipper : flippers) {
+		flipper.position += offset;
+	}
+
+	for (Enemy& enemy : enemies) {
+		enemy.position += offset;
 	}
 }
