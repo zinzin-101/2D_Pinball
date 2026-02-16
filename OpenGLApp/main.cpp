@@ -76,7 +76,7 @@ struct Ball : Circle {
 struct Obstacle : Circle {
 	float pushAmount;
 	Obstacle(): Circle(glm::vec2(), 0.5f), pushAmount(2.0f) {}
-	Obstacle(glm::vec2 position, float radius, float pushAmount = 2.0f): Circle(position, radius), pushAmount(pushAmount) {}
+	Obstacle(glm::vec2 position, float radius, float pushAmount = 5.0f): Circle(position, radius), pushAmount(pushAmount) {}
 };
 
 struct Flipper {
@@ -141,7 +141,7 @@ void renderFlippers(Shader& shader);
 void renderBorder(Shader& shader);
 
 // debugging
-#define DRAW_DEBUG
+//#define DRAW_DEBUG
 void drawSquareOutline(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, float radius);
 void drawCircleOutline(Shader& shader, glm::vec3 position, float radius);
 
@@ -415,10 +415,17 @@ struct Enemy : Circle {
 bool checkCircleCollision(Circle& c1, Circle& c2);
 void handleEnemyBorderCollision(Enemy& enemy, std::vector<glm::vec2>& borderPoints);
 void updateGame(float dt);
+void updateEnemies(float dt);
+void handleCombos(float dt);
+void handleBallSpawn();
+void handleObjectDeletion();
 void renderEnemy(Enemy& enemy, Shader* debugShader);
 void renderEnemies(Shader* debugShader);
 void spawnBall();
 Ball createBall();
+void spawnEnemy();
+void handleEnemySpawn(float dt);
+void handleUpdateSpawnParameters(float dt);
 
 std::vector<Enemy> enemies;
 GameState gameState = RUNNING;
@@ -427,19 +434,22 @@ float ballDespawnHeight = FLT_MAX;
 glm::vec2 spawnPosLeft, spawnPosRight;
 int numOfBallsToSpawn = 0;
 const float INITIAL_ENEMY_SPAWN_INTERVAL = 2.0f;
-const float INITIAL_ENEMY_DESCEND_SPEED = 1.0f;
+const float INITIAL_ENEMY_DESCEND_SPEED = 5.0f;
 const float INITIAL_ENEMY_MAX_HORIZONTAL_SPEED = 1.0f;
 const int INITTIAL_BALL_COUNT = 1;
 const int COMBO_TO_SPAWN_BALL = 2;
 const float MINIMUM_ENEMY_SPAWN_INTERVAL = 0.5f;
 const float ENEMY_SPAWN_INTERVAL_DECREASE_RATE_MULTIPLIER = 0.95f;
 const float ENEMY_SPEED_INCREASE_RATE_MULTIPLIER = 1.05f;
+const float TIME_PER_PARAMETERS_UPDATE = 15.0f;
 const float COMBO_WINDOW = 1.0f;
 int comboCounter = 0;
 float comboTimer = 0.0f;
 float enemySpawnInterval = INITIAL_ENEMY_SPAWN_INTERVAL;
 float enemyDescendSpeed = INITIAL_ENEMY_DESCEND_SPEED;
 float enemyMaxHorizontalSpeed = INITIAL_ENEMY_MAX_HORIZONTAL_SPEED;
+float enemySpawnTimer = 0.0f;
+float parameterTimer = 0.0f;
 
 enum ObjectType {
 	BALL,
@@ -892,9 +902,12 @@ void resetScene() {
 	comboCounter = 0;
 	numOfBallsToSpawn = 0;
 
-	float enemySpawnInterval = INITIAL_ENEMY_SPAWN_INTERVAL;
-	float enemyDescendSpeed = INITIAL_ENEMY_DESCEND_SPEED;
-	float enemyMaxHorizontalSpeed = INITIAL_ENEMY_MAX_HORIZONTAL_SPEED;
+	enemySpawnInterval = INITIAL_ENEMY_SPAWN_INTERVAL;
+	enemyDescendSpeed = INITIAL_ENEMY_DESCEND_SPEED;
+	enemyMaxHorizontalSpeed = INITIAL_ENEMY_MAX_HORIZONTAL_SPEED;
+
+	enemySpawnTimer = 0.0f;
+	parameterTimer = 0.0f;
 
 	borderPoints.push_back(glm::vec2(-75.0f, 75.0f));
 	borderPoints.push_back(glm::vec2(-75.0f, -5.0f));
@@ -911,11 +924,10 @@ void resetScene() {
 	borderPoints.push_back(glm::vec2(75.0f, -5.0f));
 	borderPoints.push_back(glm::vec2(75.0f, 75.0f));
 
-	obstacles.push_back(Obstacle(glm::vec2(0.0f, 30.0f), 8.0f));
 	obstacles.push_back(Obstacle(glm::vec2(-35.0f, 18.0f), 7.0f));
-	obstacles.push_back(Obstacle(glm::vec2(35.0f, 18.0f), 7.0f));
-	obstacles.push_back(Obstacle(glm::vec2(-20.0f, 0.0f), 4.0f));
-	obstacles.push_back(Obstacle(glm::vec2(20.0f, 0.0f), 10.0f));
+	obstacles.push_back(Obstacle(glm::vec2(12.0f, 50.0f), 5.0f));
+	obstacles.push_back(Obstacle(glm::vec2(-20.0f, 40.0f), 4.0f));
+	obstacles.push_back(Obstacle(glm::vec2(40.0f, 30.0f), 10.0f));
 
 	for (int i = 0; i < INITTIAL_BALL_COUNT; i++) {
 		spawnBall();
@@ -926,7 +938,7 @@ void resetScene() {
 	float maxRotation = Utils::deg2Rad(50.0f);
 	float restAngle = Utils::deg2Rad(10.0f);
 	float upperRestAngle = Utils::deg2Rad(30.0f);
-	float angularVelocity = 8.0f;
+	float angularVelocity = 12.0f;
 	float restitution = 0.2f;
 
 	glm::vec2 leftPivot = glm::vec2(-20.0f, -50.0f);
@@ -943,22 +955,22 @@ void resetScene() {
 	flippers[1].id = flippers[3].id = RIGHT;
 
 	// enemies
-	AnimatedSprite& enemyFlying = *objectToAnimatedSprite[FLYING_ENEMY];
-	AnimatedSprite& enemyDying = *objectToAnimatedSprite[DYING_ENEMY];
-	Enemy testEnemy1(glm::vec2(-20.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
-	Enemy testEnemy2(glm::vec2(0.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
-	Enemy testEnemy3(glm::vec2(20.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	//AnimatedSprite& enemyFlying = *objectToAnimatedSprite[FLYING_ENEMY];
+	//AnimatedSprite& enemyDying = *objectToAnimatedSprite[DYING_ENEMY];
+	//Enemy testEnemy1(glm::vec2(-20.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	//Enemy testEnemy2(glm::vec2(0.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	//Enemy testEnemy3(glm::vec2(20.0f, 0.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
 
-	Enemy testEnemy4(glm::vec2(-10.0f, 12.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
-	Enemy testEnemy5(glm::vec2(1.0f, 12.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
-	Enemy testEnemy6(glm::vec2(10.0f, 12.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	//Enemy testEnemy4(glm::vec2(-10.0f, 12.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	//Enemy testEnemy5(glm::vec2(1.0f, 12.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
+	//Enemy testEnemy6(glm::vec2(10.0f, 12.0f), 7.5f, 0.75f, enemyFlying, enemyDying, true, glm::vec2(0.0f, -2.0f));
 
-	enemies.push_back(testEnemy1);
-	enemies.push_back(testEnemy2);
-	enemies.push_back(testEnemy3);
-	enemies.push_back(testEnemy4);
-	enemies.push_back(testEnemy5);
-	enemies.push_back(testEnemy6);
+	//enemies.push_back(testEnemy1);
+	//enemies.push_back(testEnemy2);
+	//enemies.push_back(testEnemy3);
+	//enemies.push_back(testEnemy4);
+	//enemies.push_back(testEnemy5);
+	//enemies.push_back(testEnemy6);
 
 	lowestFlipperY = FLT_MAX;
 	for (Flipper& flipper : flippers) {
@@ -1211,6 +1223,15 @@ void handleEnemyBorderCollision(Enemy& enemy, std::vector<glm::vec2>& borderPoin
 void updateGame(float dt) {
 	if (gameState == GAME_OVER) return;
 
+	updateEnemies(dt);
+	handleCombos(dt);
+	handleBallSpawn();
+	handleObjectDeletion();
+	handleEnemySpawn(dt);
+	handleUpdateSpawnParameters(dt);
+}
+
+void updateEnemies(float dt) {
 	for (Enemy& enemy : enemies) {
 		enemy.update(dt);
 
@@ -1235,7 +1256,9 @@ void updateGame(float dt) {
 
 		handleEnemyBorderCollision(enemy, borderPoints);
 	}
+}
 
+void handleCombos(float dt) {
 	if (comboTimer > 0.0f) {
 		comboTimer -= dt;
 
@@ -1249,14 +1272,18 @@ void updateGame(float dt) {
 		comboCounter = 0;
 		spawnBall();
 	}
+}
 
+void handleBallSpawn() {
 	while (numOfBallsToSpawn > 0) {
 		Ball ball = createBall();
 		ball.position = Utils::RandFloat() > 0.5f ? spawnPosRight : spawnPosLeft;
 		balls.push_back(ball);
 		numOfBallsToSpawn--;
 	}
+}
 
+void handleObjectDeletion() {
 	for (std::vector<Ball>::iterator itr = balls.end() - 1; itr != balls.begin() - 1; --itr) {
 		Ball& ball = *itr;
 		if (ball.position.y < ballDespawnHeight) {
@@ -1298,4 +1325,39 @@ Ball createBall() {
 	ball.radius = 2.0f;
 	ball.mass = Utils::PI * ball.radius * ball.radius;
 	return ball;
+}
+
+void spawnEnemy() {
+	AnimatedSprite& enemyFlying = *objectToAnimatedSprite[FLYING_ENEMY];
+	AnimatedSprite& enemyDying = *objectToAnimatedSprite[DYING_ENEMY];
+	float xMax = spawnPosRight.x;
+	float xMin = spawnPosLeft.x;
+	float y = spawnPosLeft.y;
+	float x = Utils::RandFloat() * glm::abs(xMax - xMin) + xMin;
+	glm::vec2 spawnPos = glm::vec2(x, y);
+	float velX = Utils::RandFloat() * 2.0f * enemyMaxHorizontalSpeed - enemyMaxHorizontalSpeed;
+	float velY = -enemyDescendSpeed;
+	glm::vec2 velocity = glm::vec2(velX, velY);
+	bool facingRight = Utils::RandFloat() > 0.5f;
+	Enemy enemy(spawnPos, 7.5f, 0.25f, enemyFlying, enemyDying, facingRight, velocity);
+	enemies.push_back(enemy);
+}
+
+void handleEnemySpawn(float dt) {
+	enemySpawnTimer -= dt;
+
+	if (enemySpawnTimer <= 0.0f) {
+		enemySpawnTimer = enemySpawnInterval;
+		spawnEnemy();
+	}
+}
+
+void handleUpdateSpawnParameters(float dt) {
+	parameterTimer -= dt;
+	if (parameterTimer <= 0.0f) {
+		parameterTimer = TIME_PER_PARAMETERS_UPDATE;
+		enemySpawnInterval *= ENEMY_SPAWN_INTERVAL_DECREASE_RATE_MULTIPLIER;
+		enemyDescendSpeed *= ENEMY_SPEED_INCREASE_RATE_MULTIPLIER;
+		enemyMaxHorizontalSpeed *= ENEMY_SPEED_INCREASE_RATE_MULTIPLIER;
+	}
 }
