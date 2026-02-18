@@ -1,6 +1,7 @@
-https://github.com/user-attachments/assets/b34650dc-88a3-4ab2-8ad6-ac101f79b1ef
 
-https://xzany.itch.io/flying-demon-2d-pixel-art
-opengameart.org
 
-2D Pinball physics simulation rendered with OpenGL
+2D Pinball game with integrated physics simulation rendered with OpenGL
+
+## Asset Credits
+Flying Demon 2D Pixel Art by [Mattz Art](https://xzany.itch.io/flying-demon-2d-pixel-art) <br />
+Castle in the Dark and Flipper from [opengameart.org](opengameart.org) <br />
