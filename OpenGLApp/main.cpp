@@ -712,8 +712,15 @@ void processInput(GLFWwindow* window) {
 		resetScene();
 	}
 
+	// cheats
 	if (getKeyDown(window, GLFW_KEY_SPACE)) {
-		spawnBall();
+		if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS) {
+			spawnBall();
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+			spawnEnemy();
+		}
 	}
 }
 
