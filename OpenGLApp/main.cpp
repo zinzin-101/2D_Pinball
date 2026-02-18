@@ -140,6 +140,7 @@ void renderObstacles(Shader& shader);
 void renderFlippers(Shader& shader);
 void renderBorder(Shader& shader);
 void renderBackground(float dt);
+glm::vec3 viewPos = glm::vec3(0.0f);
 
 // debugging
 //#define DRAW_DEBUG
@@ -217,6 +218,8 @@ struct Sprite {
 			-1.0f, 1.0f
 		);
 
+		glm::mat4 view = glm::translate(glm::mat4(1.0f), -viewPos);
+		shader->setMat4("view", view);
 
 		shader->setMat4("model", model);
 		shader->setMat4("projection", projection);
@@ -283,6 +286,8 @@ struct SquareLineSprite : Sprite {
 			-1.0f, 1.0f
 		);
 
+		glm::mat4 view = glm::translate(glm::mat4(1.0f), -viewPos);
+		shader->setMat4("view", view);
 
 		shader->setMat4("model", model);
 		shader->setMat4("projection", projection);
@@ -332,6 +337,9 @@ struct AnimatedSprite {
 			-(WORLD_HEIGHT / 2.0f), (WORLD_HEIGHT / 2.0f),
 			-1.0f, 1.0f
 		);
+
+		glm::mat4 view = glm::translate(glm::mat4(1.0f), -viewPos);
+		shader->setMat4("view", view);
 
 		shader->setMat4("model", model);
 		shader->setMat4("projection", projection);
@@ -501,6 +509,13 @@ float parameterTimer = 0.0f;
 float scoreIntervalTimer = 0.0f;
 int score = 0;
 
+void startShake();
+void handleShake(float dt);
+void endShake();
+float shakeTimer = 0.0f;
+const float SHAKE_DURATION = 0.25f;
+const int COMBO_TO_SHAKE = COMBO_TO_SPAWN_BALL;
+
 enum ObjectType {
 	BALL,
 	OBSTACLE,
@@ -525,7 +540,7 @@ struct NumberText {
 	int value;
 	bool overrideOverlay;
 	NumberText(): value(0), overrideOverlay(false) {}
-	NumberText(int value): value(value) {}
+	NumberText(int value): value(value), overrideOverlay(false) {}
 	void drawText(glm::vec3 position, float size, float rotation = 0.0f) {
 		std::string strValue = std::to_string(value);
 		int length = strValue.length();
@@ -548,6 +563,12 @@ const float SCORE_TEXT_SIZE = 10.0f;
 const glm::vec2 WORLD_OFFSET = glm::vec2(25.0f, 0.0f);
 void renderScoreText();
 void offsetEverythingBy(glm::vec2 offset);
+
+void renderGameOver();
+void renderTutorial();
+void renderText();
+Sprite* gameoverSpritePtr = nullptr;
+Sprite* tutorialSpritePtr = nullptr;
 
 // controls
 std::map<unsigned, bool> keyDownMap;
@@ -652,6 +673,13 @@ int main() {
 	charToNumberSprite['9'] = &number9;
 	scoreText.overrideOverlay = true;
 
+	Sprite gameoverSprite = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/gameover.png").c_str()), true));
+	gameoverSprite.overrideOverlay = true;
+	gameoverSpritePtr = &gameoverSprite;
+
+	Sprite tutorialSprite = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/tutorial.png").c_str()), true));
+	tutorialSpritePtr = &tutorialSprite;
+
 	enemies.reserve(100);
 	resetScene();
 	while (!glfwWindowShouldClose(window)) {
@@ -674,7 +702,7 @@ int main() {
 		renderObstacles(circleShader);
 		renderFlippers(squareShader);
 		renderBorder(squareShader);
-		renderScoreText();
+		renderText();
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -866,6 +894,9 @@ void drawCircle(Shader& shader, glm::vec3 position, float radius, glm::vec3 colo
 		-(WORLD_HEIGHT / 2.0f), (WORLD_HEIGHT / 2.0f),
 		-1.0f, 1.0f
 	);
+
+	glm::mat4 view = glm::translate(glm::mat4(1.0f), -viewPos);
+	shader.setMat4("view", view);
 	shader.setMat4("projection", projection);
 	shader.setFloat("scale", radius);
 	shader.setVec3("position", position);
@@ -883,7 +914,9 @@ void drawSquareLine(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, float 
 		-1.0f, 1.0f
 	);
 
-	glm::mat4 view(1.0f);
+	glm::mat4 view = glm::translate(glm::mat4(1.0f), -viewPos);
+	shader.setMat4("view", view);
+
 	glm::vec2 startToEnd = endPos - startPos;
 	float length = glm::length(startToEnd);
 	glm::vec2 dir = glm::normalize(startToEnd);
@@ -954,7 +987,9 @@ void renderFlippers(Shader& shader) {
 
 void renderBackground(float dt) {
 	backgroundPtr->drawSprite(glm::vec3(-25.0f, 0.0f, 0.0f), glm::vec3(250.0f), 0.0f, glm::vec3(0.5f));
-	backgroundPtr->update(dt);
+	if (gameState != GAME_OVER) {
+		backgroundPtr->update(dt);
+	}
 }
 
 void renderBorder(Shader& shader) {
@@ -983,7 +1018,9 @@ void drawSquareOutline(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, flo
 		-1.0f, 1.0f
 	);
 
-	glm::mat4 view(1.0f);
+	glm::mat4 view = glm::translate(glm::mat4(1.0f), -viewPos);
+	shader.setMat4("view", view);
+
 	glm::vec2 startToEnd = endPos - startPos;
 	float length = glm::length(startToEnd);
 	glm::vec2 dir = glm::normalize(startToEnd);
@@ -1365,6 +1402,7 @@ void updateGame(float dt) {
 	handleEnemySpawn(dt);
 	handleUpdateSpawnParameters(dt);
 	handleScore(dt);
+	handleShake(dt);
 }
 
 void updateEnemies(float dt) {
@@ -1403,6 +1441,10 @@ void handleCombos(float dt) {
 			comboTimer = 0.0f;
 			comboCounter = 0;
 		}
+	}
+
+	if (comboCounter >= COMBO_TO_SHAKE) {
+		startShake();
 	}
 
 	if (comboCounter >= COMBO_TO_SPAWN_BALL) {
@@ -1518,6 +1560,22 @@ void renderScoreText() {
 	scoreText.drawText(SCORE_TEXT_POSITION, SCORE_TEXT_SIZE);
 }
 
+void renderGameOver() {
+	gameoverSpritePtr->drawSprite(glm::vec3(0.0f), glm::vec3(100.0f), 0.0f);
+}
+
+void renderTutorial() {
+	tutorialSpritePtr->drawSprite(glm::vec3(-80.0f, -35.0f, 0.0f), glm::vec3(50.0f), 0.0f);
+}
+
+void renderText() {
+	if (gameState == GAME_OVER) {
+		renderGameOver();
+	}
+	renderScoreText();
+	renderTutorial();
+}
+
 void offsetEverythingBy(glm::vec2 offset) {
 	for (glm::vec2& point : borderPoints) {
 		point += offset;
@@ -1538,4 +1596,26 @@ void offsetEverythingBy(glm::vec2 offset) {
 	for (Enemy& enemy : enemies) {
 		enemy.position += offset;
 	}
+}
+
+void startShake(){
+	shakeTimer = SHAKE_DURATION;
+}
+
+void handleShake(float dt){
+	glm::vec3 shakeOffset = glm::vec3(
+		2.0f * Utils::RandFloat() - 1.0f,
+		2.0f * Utils::RandFloat() - 1.0f,
+		0.0f
+	);
+	viewPos = shakeOffset;
+	shakeTimer -= dt;
+	if (shakeTimer <= 0.0f) {
+		shakeTimer = 0.0f;
+		endShake();
+	}
+}
+
+void endShake(){
+	viewPos = glm::vec3(0.0f);
 }
