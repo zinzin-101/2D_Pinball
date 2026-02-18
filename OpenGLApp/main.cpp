@@ -302,9 +302,11 @@ struct AnimatedSprite {
 	unsigned int currentFrame;
 	float timePerFrame;
 	float timer;
+	bool isFlipped;
+	bool isLooping;
 	glm::vec2 animationOffset;
-	AnimatedSprite(Shader& shader, Sprite& sprite) : shader(&shader), sprite(&sprite), frameCount(0), currentFrame(0), timePerFrame(0.0f), timer(0.0f), animationOffset(0.0f) {}
-	AnimatedSprite():shader(nullptr), sprite(nullptr), frameCount(0), currentFrame(0), timePerFrame(0.0f), timer(0.0f), animationOffset(0.0f) {}
+	AnimatedSprite(Shader& shader, Sprite& sprite) : shader(&shader), sprite(&sprite), frameCount(0), currentFrame(0), timePerFrame(0.0f), timer(0.0f), animationOffset(0.0f), isFlipped(false), isLooping(true) {}
+	AnimatedSprite():shader(nullptr), sprite(nullptr), frameCount(0), currentFrame(0), timePerFrame(0.0f), timer(0.0f), animationOffset(0.0f), isFlipped(false), isLooping(true) {}
 
 	void drawSprite(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f), bool isRadian = false) {
 		shader->use();
@@ -317,7 +319,7 @@ struct AnimatedSprite {
 		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
 		//model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 
-		model = glm::scale(model, glm::vec3(sprite->isFlipped ? -1.0f : 1.0f, 1.0f, 1.0f));
+		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 1.0f));
 		model = glm::scale(model, glm::vec3(size.x, size.y, 1.0f));
 
 		glm::mat4 projection = glm::ortho(
@@ -349,7 +351,14 @@ struct AnimatedSprite {
 		timer += dt;
 		if (timer > timePerFrame) {
 			timer = 0.0f;
-			currentFrame = ++currentFrame % frameCount;
+			if (isLooping){
+				currentFrame = ++currentFrame % frameCount;
+			}
+			else {
+				if (currentFrame < frameCount) {
+					currentFrame++;
+				}
+			}
 			setFrame(currentFrame);
 		}
 	}
@@ -365,21 +374,27 @@ enum GameState {
 };
 
 struct Enemy : Circle {
+	enum Status {
+		ALIVE,
+		DEAD
+	};
+
 	float speedAbsorption;
 	AnimatedSprite flyingSprite;
 	AnimatedSprite dyingSprite;
 	bool isDead;
 	bool isFacingRight;
 	glm::vec2 velocity;
-	AnimatedSprite* currentSprite;
+	Status status;
 	bool canRemove;
 
-	Enemy(glm::vec2 position, float radius, float pushAmount, AnimatedSprite& flyingSprite, AnimatedSprite& dyingSprite, bool isFacingRight, glm::vec2 velocity) :
+	Enemy(glm::vec2 position, float radius, float pushAmount, const AnimatedSprite& flyingSprite, const AnimatedSprite& dyingSprite, bool isFacingRight, glm::vec2 velocity) :
 		Circle(position, radius),
 		speedAbsorption(pushAmount),
 		flyingSprite(flyingSprite), dyingSprite(dyingSprite),
-		isDead(false), isFacingRight(isFacingRight), velocity(velocity), currentSprite(nullptr), canRemove(false) {
-		currentSprite = &this->flyingSprite;
+		isDead(false), isFacingRight(isFacingRight), velocity(velocity), status(ALIVE), canRemove(false) {
+		this->flyingSprite.isFlipped = !isFacingRight;
+		this->dyingSprite.isFlipped = !isFacingRight;
 	}
 
 	Enemy(const Enemy& other): Circle(other.position, other.radius) {
@@ -388,27 +403,49 @@ struct Enemy : Circle {
 		this->dyingSprite = other.dyingSprite;
 		this->isDead = other.isDead;
 		this->isFacingRight = other.isFacingRight;
+		this->flyingSprite.isFlipped = !this->isFacingRight;
+		this->dyingSprite.isFlipped = !this->isFacingRight;
 		this->velocity = other.velocity;
-		this->currentSprite = &this->flyingSprite;
+		this->status = other.status;
 		this->canRemove = other.canRemove;
 	}
 
 	void update(float dt) {
-		currentSprite->update(dt);
+		switch (status) {
+			case ALIVE:
+				flyingSprite.update(dt);
+				break;
+			case DEAD:
+				dyingSprite.update(dt);
+				break;
+		}
 
 		if (isDead) {
-			if (currentSprite->currentFrame >= currentSprite->frameCount - 1) {
+			if (dyingSprite.currentFrame >= dyingSprite.frameCount - 1) {
 				canRemove = true;
 			}
 			return;
 		}
+
 
 		position += velocity * dt;
 	}
 
 	void setToDead() {
 		isDead = true;
-		currentSprite = &dyingSprite;
+		dyingSprite.currentFrame = 0;
+		status = DEAD;
+	}
+
+	void draw() {
+		switch (status) {
+			case ALIVE:
+				flyingSprite.drawSprite(glm::vec3(position, 0.0f), glm::vec3(radius * 2.0f), 0.0f, glm::vec3(1.0f));
+				break;
+			case DEAD:
+				dyingSprite.drawSprite(glm::vec3(position, 0.0f), glm::vec3(radius * 2.0f), 0.0f, glm::vec3(1.0f));
+				break;
+			}
 	}
 };
 
@@ -508,7 +545,6 @@ std::map<unsigned, bool> keyDownMap;
 bool getKeyDown(GLFWwindow* window, unsigned int key);
 
 int main() {
-
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -567,12 +603,14 @@ int main() {
 	AnimatedSprite enemyFlying = AnimatedSprite(animationShader, enemyFlyingSprite);
 	enemyFlying.frameCount = 4;
 	enemyFlying.timePerFrame = 0.1f;
+	enemyFlying.isLooping = true;
 	objectToAnimatedSprite[FLYING_ENEMY] = &enemyFlying;
 	
 	Sprite enemyDyingSprite = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/enemy_dying.png").c_str()), true));
 	AnimatedSprite enemyDying = AnimatedSprite(animationShader, enemyDyingSprite);
 	enemyDying.frameCount = 7;
 	enemyDying.timePerFrame = 0.05f;
+	enemyDying.isLooping = false;
 	objectToAnimatedSprite[DYING_ENEMY] = &enemyDying;
 
 	// init text sprite
@@ -597,8 +635,8 @@ int main() {
 	charToNumberSprite['8'] = &number8;
 	charToNumberSprite['9'] = &number9;
 
+	enemies.reserve(100);
 	resetScene();
-
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
 
@@ -1347,26 +1385,30 @@ void handleBallSpawn() {
 }
 
 void handleObjectDeletion() {
-	for (std::vector<Ball>::iterator itr = balls.end() - 1; itr != balls.begin() - 1; --itr) {
+	for (std::vector<Ball>::iterator itr = balls.end(); itr != balls.begin();) {
+		--itr;
+
 		Ball& ball = *itr;
 		if (ball.position.y < ballDespawnHeight) {
-			balls.erase(itr);
+			itr = balls.erase(itr);
 		}
 	}
 	if (balls.empty()) {
 		gameState = GAME_OVER;
 	}
 
-	for (std::vector<Enemy>::iterator itr = enemies.end() - 1; itr != enemies.begin() - 1; --itr) {
+	for (std::vector<Enemy>::iterator itr = enemies.end(); itr != enemies.begin();) {
+		--itr;
+
 		Enemy& enemy = *itr;
 		if (enemy.canRemove) {
-			enemies.erase(itr);
+			itr = enemies.erase(itr);
 		}
 	}
 }
 
 void renderEnemy(Enemy& enemy, Shader* debugShader = nullptr) {
-	enemy.currentSprite->drawSprite(glm::vec3(enemy.position, 0.0f), glm::vec3(enemy.radius * 2.0f), 0.0f, glm::vec3(1.0f));
+	enemy.draw();
 	#ifdef DRAW_DEBUG
 	if (debugShader != nullptr)
 		drawCircleOutline(*debugShader, glm::vec3(enemy.position, 0.0f), enemy.radius);
@@ -1401,7 +1443,8 @@ void spawnEnemy() {
 	float velX = Utils::RandFloat() * 2.0f * enemyMaxHorizontalSpeed - enemyMaxHorizontalSpeed;
 	float velY = -enemyDescendSpeed;
 	glm::vec2 velocity = glm::vec2(velX, velY);
-	bool facingRight = Utils::RandFloat() > 0.5f;
+	//bool facingRight = Utils::RandFloat() > 0.5f;
+	bool facingRight = true;
 	Enemy enemy(spawnPos, 7.5f, 0.25f, enemyFlying, enemyDying, facingRight, velocity);
 	enemies.push_back(enemy);
 }
