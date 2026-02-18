@@ -5,4 +5,4 @@ https://github.com/user-attachments/assets/ed096ba1-4377-489e-82fd-21f5525c4fef
 
 ## Asset Credits
 Flying Demon 2D Pixel Art by [Mattz Art](https://xzany.itch.io/flying-demon-2d-pixel-art) <br />
-Castle in the Dark background, Flipper and Number Sprites from [opengameart.org](opengameart.org) <br />
+Castle in the Dark background, Flipper and Number Sprites from [opengameart.org](https://opengameart.org) <br />
