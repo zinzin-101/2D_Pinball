@@ -139,6 +139,7 @@ void renderBalls(Shader& shader);
 void renderObstacles(Shader& shader);
 void renderFlippers(Shader& shader);
 void renderBorder(Shader& shader);
+void renderBackground(float dt);
 
 // debugging
 //#define DRAW_DEBUG
@@ -146,6 +147,7 @@ void drawSquareOutline(Shader& shader, glm::vec3 startPos, glm::vec3 endPos, flo
 void drawCircleOutline(Shader& shader, glm::vec3 position, float radius);
 
 // visual
+glm::vec3 globalOverlay = glm::vec3(1.0f);
 struct Texture {
 	GLuint id;
 	unsigned int width, height;
@@ -186,7 +188,8 @@ struct Sprite {
 	GLuint quadVAO;
 	bool isFlipped;
 	glm::vec3 offset;
-	Sprite(Shader& shader, Texture texture): shader(&shader), texture(texture), isFlipped(false), offset(0.0f) {
+	bool overrideOverlay;
+	Sprite(Shader& shader, Texture texture): shader(&shader), texture(texture), isFlipped(false), offset(0.0f), overrideOverlay(false) {
 		initRenderData();
 	}
 
@@ -200,12 +203,12 @@ struct Sprite {
 		model = glm::translate(model, glm::vec3(position));
 		model = glm::translate(model, glm::vec3(offset));
 
+		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 1.0f));
 		model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 		float angle = isRadian ? rotation : glm::radians(rotation);
 		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
 		//model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 
-		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 1.0f));
 		model = glm::scale(model, glm::vec3(size.x, size.y, 1.0f));
 
 		glm::mat4 projection = glm::ortho(
@@ -218,7 +221,8 @@ struct Sprite {
 		shader->setMat4("model", model);
 		shader->setMat4("projection", projection);
 		shader->setBool("enableTiling", false);
-		shader->setVec3("color", color);
+		glm::vec3 overlay = (overrideOverlay ? glm::vec3(1.0f) : globalOverlay);
+		shader->setVec3("color", color * overlay);
 
 		glActiveTexture(GL_TEXTURE0);
 		texture.bind();
@@ -284,7 +288,8 @@ struct SquareLineSprite : Sprite {
 		shader->setMat4("projection", projection);
 		shader->setBool("enableTiling", useTiling);
 		shader->setVec2("tiling", size.x * spriteScale, size.y * spriteScale);
-		shader->setVec3("color", color);
+		glm::vec3 overlay = (overrideOverlay ? glm::vec3(1.0f) : globalOverlay);
+		shader->setVec3("color", color * overlay);
 
 		glActiveTexture(GL_TEXTURE0);
 		texture.bind();
@@ -314,12 +319,12 @@ struct AnimatedSprite {
 		model = glm::translate(model, glm::vec3(position));
 		model = glm::translate(model, glm::vec3(sprite->offset));
 
+		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 1.0f));
 		model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 		float angle = isRadian ? rotation : glm::radians(rotation);
 		model = glm::rotate(model, angle, glm::vec3(0.0f, 0.0f, 1.0f));
 		//model = glm::translate(model, glm::vec3(-0.5f * size.x, -0.5f * size.y, 0.0f));
 
-		model = glm::scale(model, glm::vec3(isFlipped ? -1.0f : 1.0f, 1.0f, 1.0f));
 		model = glm::scale(model, glm::vec3(size.x, size.y, 1.0f));
 
 		glm::mat4 projection = glm::ortho(
@@ -330,7 +335,8 @@ struct AnimatedSprite {
 
 		shader->setMat4("model", model);
 		shader->setMat4("projection", projection);
-		shader->setVec3("color", color);
+		glm::vec3 overlay = (sprite->overrideOverlay ? glm::vec3(1.0f) : globalOverlay);
+		shader->setVec3("color", color * overlay);
 
 		shader->setVec2("offset", animationOffset);
 		shader->setVec2("frameScale", glm::vec2(1.0f / (float)frameCount, 1.0f));
@@ -509,6 +515,7 @@ enum AnimatedObject {
 
 Sprite* objectToSprite[4];
 AnimatedSprite* objectToAnimatedSprite[2];
+AnimatedSprite* backgroundPtr = nullptr;
 const float BORDER_SPRITE_SCALE = 0.1f;
 
 // text object
@@ -516,7 +523,8 @@ std::map<char, Sprite*> charToNumberSprite;
 const float DEFAULT_TEXT_GAP = 1.0f;
 struct NumberText {
 	int value;
-	NumberText(): value(0) {}
+	bool overrideOverlay;
+	NumberText(): value(0), overrideOverlay(false) {}
 	NumberText(int value): value(value) {}
 	void drawText(glm::vec3 position, float size, float rotation = 0.0f) {
 		std::string strValue = std::to_string(value);
@@ -527,6 +535,7 @@ struct NumberText {
 		}
 		glm::vec3 textPos = position;
 		for (Sprite* numberSprite : numberSprites) {
+			numberSprite->overrideOverlay = overrideOverlay;
 			numberSprite->drawSprite(textPos, glm::vec3(size), rotation);
 			textPos.x += DEFAULT_TEXT_GAP * size;
 		}
@@ -579,12 +588,19 @@ int main() {
 	Shader animationShader("animation.vs", "animation.fs");
 	initGLData();
 
-
 	stbi_set_flip_vertically_on_load(true);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// init sprite
+	Sprite background = Sprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/background.png").c_str()), false));
+	AnimatedSprite backgroundAnimation = AnimatedSprite(animationShader, background);
+	backgroundAnimation.frameCount = 16;
+	backgroundAnimation.timePerFrame = 0.16;
+	backgroundAnimation.isLooping = true;
+	backgroundAnimation.isFlipped = true;
+	backgroundPtr = &backgroundAnimation;
+
 	SquareLineSprite borderSprite = SquareLineSprite(textureShader, loadTextureFromFile((FileSystem::getPath("resources/stone.png").c_str()), true));
 	borderSprite.useTiling = true;
 	borderSprite.spriteScale = BORDER_SPRITE_SCALE;
@@ -634,6 +650,7 @@ int main() {
 	charToNumberSprite['7'] = &number7;
 	charToNumberSprite['8'] = &number8;
 	charToNumberSprite['9'] = &number9;
+	scoreText.overrideOverlay = true;
 
 	enemies.reserve(100);
 	resetScene();
@@ -651,6 +668,7 @@ int main() {
 		// render
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
+		renderBackground(deltaTime);
 		renderEnemies(&circleShader);
 		renderBalls(circleShader);
 		renderObstacles(circleShader);
@@ -933,6 +951,12 @@ void renderFlippers(Shader& shader) {
 	}
 	#endif
 }
+
+void renderBackground(float dt) {
+	backgroundPtr->drawSprite(glm::vec3(-25.0f, 0.0f, 0.0f), glm::vec3(250.0f), 0.0f, glm::vec3(0.5f));
+	backgroundPtr->update(dt);
+}
+
 void renderBorder(Shader& shader) {
 	int n = borderPoints.size();
 	for (int i = 0; i < n; i++) {
@@ -998,6 +1022,8 @@ void resetScene() {
 	flippers.clear();
 	obstacles.clear();
 	enemies.clear();
+
+	globalOverlay = glm::vec3(1.0f);
 
 	gameState = RUNNING;
 	comboCounter = 0;
@@ -1327,7 +1353,10 @@ void handleEnemyBorderCollision(Enemy& enemy, std::vector<glm::vec2>& borderPoin
 }
 
 void updateGame(float dt) {
-	if (gameState == GAME_OVER) return;
+	if (gameState == GAME_OVER) {
+		globalOverlay = glm::vec3(0.5f);
+		return;
+	}
 
 	updateEnemies(dt);
 	handleCombos(dt);
@@ -1450,8 +1479,9 @@ void spawnEnemy() {
 	float velX = Utils::RandFloat() * 2.0f * enemyMaxHorizontalSpeed - enemyMaxHorizontalSpeed;
 	float velY = -enemyDescendSpeed;
 	glm::vec2 velocity = glm::vec2(velX, velY);
+	bool facingRight = spawnPos.x >= (xMax + xMin) / 2.0f;
 	//bool facingRight = Utils::RandFloat() > 0.5f;
-	bool facingRight = true;
+	//bool facingRight = true;
 	Enemy enemy(spawnPos, 7.5f, 0.25f, enemyFlying, enemyDying, facingRight, velocity);
 	enemies.push_back(enemy);
 }
