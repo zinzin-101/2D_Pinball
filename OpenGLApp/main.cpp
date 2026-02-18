@@ -483,6 +483,7 @@ void spawnEnemy();
 void handleEnemySpawn(float dt);
 void handleUpdateSpawnParameters(float dt);
 void handleScore(float dt);
+void incrementCombo();
 
 std::vector<Enemy> enemies;
 GameState gameState = RUNNING;
@@ -691,6 +692,7 @@ int main() {
 	tutorialSpritePtr = &tutorialSprite;
 
 	enemies.reserve(100);
+	balls.reserve(100);
 	resetScene();
 	while (!glfwWindowShouldClose(window)) {
 		processInput(window);
@@ -1433,7 +1435,7 @@ void updateEnemies(float dt) {
 				ball.velocity = enemyToBall * (enemy.speedAbsorption * glm::length(ball.velocity));
 				enemy.setToDead();
 				comboTimer = COMBO_WINDOW;
-				comboCounter++;
+				incrementCombo();
 				score += comboCounter > 1 ? SCORE_PER_ENEMY * COMBO_SCORE_MULTIPLIER : SCORE_PER_ENEMY;
 				break;
 			}
@@ -1451,10 +1453,6 @@ void handleCombos(float dt) {
 			comboTimer = 0.0f;
 			comboCounter = 0;
 		}
-	}
-
-	if (comboCounter >= COMBO_TO_SHAKE) {
-		startShake();
 	}
 
 	if (comboCounter >= COMBO_TO_SPAWN_BALL) {
@@ -1562,6 +1560,14 @@ void handleScore(float dt) {
 	if (scoreIntervalTimer <= 0.0f) {
 		scoreIntervalTimer = TIME_PER_SCORING_INTERVAL;
 		score += SCORE_PER_SCORING_INTERVAL;
+	}
+}
+
+void incrementCombo() {
+	comboCounter++;
+		
+	if (comboCounter >= COMBO_TO_SHAKE) {
+		startShake();
 	}
 }
 
