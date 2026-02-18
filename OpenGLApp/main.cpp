@@ -20,9 +20,14 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void processInput(GLFWwindow* window);
 
 // settings
+#define FULLSCREEN
+#ifdef FULLSCREEN
+const unsigned int WIDTH = 1920;
+const unsigned int HEIGHT = 1080;
+#else
 const unsigned int WIDTH = 1600;
 const unsigned int HEIGHT = 900;
-
+#endif
 // glfw
 GLFWwindow* window = nullptr;
 
@@ -580,8 +585,13 @@ int main() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+	GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
+	#ifdef FULLSCREEN
+	window = glfwCreateWindow(WIDTH, HEIGHT, "2D_Pinball", primaryMonitor, NULL);
+	#else
 	window = glfwCreateWindow(WIDTH, HEIGHT, "2D_Pinball", NULL, NULL);
-
+	#endif
 	if (window == NULL) {
 		std::cout << "Failed to create GLFW window" << std::endl;
 		glfwTerminate();
