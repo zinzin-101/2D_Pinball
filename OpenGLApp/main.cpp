@@ -1619,6 +1619,7 @@ void startShake(){
 }
 
 void handleShake(float dt){
+	if (shakeTimer <= 0.0f) return;
 	glm::vec3 shakeOffset = glm::vec3(
 		2.0f * Utils::RandFloat() - 1.0f,
 		2.0f * Utils::RandFloat() - 1.0f,
