@@ -7,6 +7,7 @@ https://github.com/user-attachments/assets/ed096ba1-4377-489e-82fd-21f5525c4fef
 
 ### Controls:
 Left/Right Click - Flipper controls <br />
+R - Reset game <br />
 ESC - Close game <br />
 F11 - Toggle fullscreen <br />
 
