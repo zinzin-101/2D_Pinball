@@ -1,4 +1,5 @@
 #include <glad/glad.h>
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 #include <shader.h>
@@ -20,7 +21,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void processInput(GLFWwindow* window);
 
 // settings
-#define FULLSCREEN
+//#define FULLSCREEN
 #ifdef FULLSCREEN
 const unsigned int WIDTH = 1920;
 const unsigned int HEIGHT = 1080;
@@ -30,6 +31,7 @@ const unsigned int HEIGHT = 900;
 #endif
 // glfw
 GLFWwindow* window = nullptr;
+void toggleFullscreen(GLFWwindow* window);
 
 // vertex data
 GLuint circleVAO, circleVBO, circleEBO;
@@ -592,6 +594,7 @@ int main() {
 	window = glfwCreateWindow(WIDTH, HEIGHT, "2D_Pinball", primaryMonitor, NULL);
 	#else
 	window = glfwCreateWindow(WIDTH, HEIGHT, "2D_Pinball", NULL, NULL);
+	glfwSetWindowPos(window, (mode->width / 2) - (WIDTH / 2), (mode->height / 2) - (HEIGHT / 2));
 	#endif
 	if (window == NULL) {
 		std::cout << "Failed to create GLFW window" << std::endl;
@@ -724,7 +727,7 @@ int main() {
 }
 
 void frameBufferSizeCallback(GLFWwindow* window, int width, int height) {
-
+	glViewport(0, 0, width, height);
 }
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
@@ -779,6 +782,23 @@ void processInput(GLFWwindow* window) {
 		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
 			spawnEnemy();
 		}
+	}
+
+	// toggle fullscreen
+	if (getKeyDown(window, GLFW_KEY_F11)) {
+		toggleFullscreen(window);
+	}
+}
+
+void toggleFullscreen(GLFWwindow* window) {
+	GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
+
+	if (glfwGetWindowMonitor(window)) { // full screen -> windowed
+		glfwSetWindowMonitor(window, NULL, (mode->width / 2) - (WIDTH / 2), (mode->height / 2) - (HEIGHT / 2), WIDTH, HEIGHT, GLFW_DONT_CARE);
+	}
+	else { // windowed -> full screen
+		glfwSetWindowMonitor(window, primaryMonitor, 0, 0, mode->width, mode->height, mode->refreshRate);
 	}
 }
 
@@ -998,7 +1018,7 @@ void renderFlippers(Shader& shader) {
 }
 
 void renderBackground(float dt) {
-	backgroundPtr->drawSprite(glm::vec3(-25.0f, 0.0f, 0.0f), glm::vec3(250.0f), 0.0f, glm::vec3(0.5f));
+	backgroundPtr->drawSprite(glm::vec3(-25.0f, 0.0f, 0.0f), glm::vec3(276.0f), 0.0f, glm::vec3(0.5f));
 	if (gameState != GAME_OVER) {
 		backgroundPtr->update(dt);
 	}
