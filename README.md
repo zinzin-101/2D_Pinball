@@ -1,9 +1,12 @@
 ## 2D Pinball game with integrated physics simulation rendered with OpenGL
-https://github.com/user-attachments/assets/fad09402-1a59-4b39-86eb-099c566faec6
 
-https://github.com/user-attachments/assets/15a2d616-7c70-4883-a1f4-f96210df2bf9
+https://github.com/user-attachments/assets/31b4e38d-5b26-4a41-b6cc-029d49ec887b
 
-https://github.com/user-attachments/assets/ed096ba1-4377-489e-82fd-21f5525c4fef
+
+https://github.com/user-attachments/assets/c67b13b9-cf23-4d95-ab0a-6d8f151a54a9
+
+
+https://github.com/user-attachments/assets/dd0ef1aa-fa7f-4634-8779-8d335bd81126
 
 ### Controls:
 Left/Right Click - Flipper controls <br />
