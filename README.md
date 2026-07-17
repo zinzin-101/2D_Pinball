@@ -1,4 +1,4 @@
-## 2D Pinball game with integrated physics simulation rendered with OpenGL
+## 2D Pinball game with accurate physics rendered with OpenGL
 
 https://github.com/user-attachments/assets/31b4e38d-5b26-4a41-b6cc-029d49ec887b
 
