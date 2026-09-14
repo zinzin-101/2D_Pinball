@@ -1186,8 +1186,11 @@ void resetScene() {
 			secondLowestPoint = lowestPoint;
 			lowestPoint = point.y;
 		}
+		else if (point.y < secondLowestPoint && point.y != lowestPoint) {
+			secondLowestPoint = point.y;
+		}
 	}
-	ballDespawnHeight = (lowestPoint + secondLowestPoint) / 2.0f;
+	ballDespawnHeight = ((secondLowestPoint - lowestPoint) / 2.0f) + lowestPoint;
 
 	float highestY = std::numeric_limits<float>::lowest();
 	float leftmost = FLT_MAX;
